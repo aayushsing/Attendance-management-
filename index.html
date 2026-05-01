@@ -1,0 +1,1652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1F3864">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Hazri">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Hazri — Attendance Manager</title>
+
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%231F3864'/%3E%3Cpath d='M28 52 L44 68 L74 36' stroke='%23F59E0B' stroke-width='10' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E">
+
+<link rel="manifest" href='data:application/manifest+json,{"name":"Hazri — Attendance Manager","short_name":"Hazri","start_url":".","display":"standalone","background_color":"%23F8FAFC","theme_color":"%231F3864","icons":[{"src":"data:image/svg+xml;utf8,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Crect width=%27100%27 height=%27100%27 rx=%2722%27 fill=%27%231F3864%27/%3E%3Cpath d=%27M28 52 L44 68 L74 36%27 stroke=%27%23F59E0B%27 stroke-width=%2710%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27 fill=%27none%27/%3E%3C/svg%3E","sizes":"any","type":"image/svg+xml"}]}'>
+
+<!-- Libraries -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+
+<style>
+/* ================================================================
+   HAZRI — Attendance Manager
+   Single-file app · Designed & developed by Aayush Singh
+   ================================================================ */
+
+:root {
+  --primary: #1F3864;
+  --primary-dark: #152A4A;
+  --primary-light: #2C4F8B;
+  --accent: #F59E0B;
+  --accent-soft: #FEF3C7;
+
+  --bg: #F4F6FA;
+  --surface: #FFFFFF;
+  --surface-2: #F8FAFC;
+  --border: #E2E8F0;
+  --border-strong: #CBD5E1;
+
+  --text: #0F172A;
+  --text-muted: #64748B;
+  --text-light: #94A3B8;
+
+  --success: #16A34A;
+  --success-bg: #DCFCE7;
+  --success-text: #15803D;
+  --danger: #DC2626;
+  --danger-bg: #FEE2E2;
+  --danger-text: #991B1B;
+  --warning: #F59E0B;
+  --warning-bg: #FEF3C7;
+  --warning-text: #854D0E;
+
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-lg: 16px;
+  --shadow-sm: 0 1px 2px rgba(15,23,42,.05);
+  --shadow: 0 4px 12px rgba(15,23,42,.08);
+  --shadow-lg: 0 10px 30px rgba(15,23,42,.15);
+
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-top: env(safe-area-inset-top, 0px);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.5;
+  min-height: 100vh;
+  overflow-x: hidden;
+  padding-top: var(--safe-top);
+}
+
+/* ----- Top bar ----- */
+.topbar {
+  position: sticky; top: 0; z-index: 50;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+  color: white;
+  padding: calc(14px + var(--safe-top)) 16px 14px;
+  box-shadow: var(--shadow);
+  display: flex; align-items: center; gap: 12px;
+}
+.topbar .logo {
+  width: 36px; height: 36px; border-radius: 9px;
+  background: rgba(255,255,255,.15); display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.topbar .logo svg { width: 22px; height: 22px; }
+.topbar .titles { flex: 1; min-width: 0; }
+.topbar .titles h1 { font-size: 17px; font-weight: 700; letter-spacing: -.01em; }
+.topbar .titles p { font-size: 11.5px; opacity: .85; margin-top: 1px; letter-spacing: .04em; text-transform: uppercase; }
+.topbar .stats {
+  font-size: 11px; opacity: .9; text-align: right; line-height: 1.3;
+}
+.topbar .stats b { font-size: 14px; font-weight: 700; display: block; }
+
+/* ----- Main ----- */
+main {
+  padding: 16px 14px 100px;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.tab { display: none; animation: fadeIn .25s ease; }
+.tab.active { display: block; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px);} to { opacity:1; transform: none; }}
+
+.section-title {
+  font-size: 13px; font-weight: 700; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: .08em;
+  margin: 4px 4px 10px; display: flex; align-items: center; gap: 8px;
+}
+.section-title .badge {
+  background: var(--primary); color: white; padding: 2px 8px;
+  border-radius: 999px; font-size: 11px; letter-spacing: 0; text-transform: none;
+}
+
+/* ----- Cards ----- */
+.card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+  padding: 16px;
+  margin-bottom: 14px;
+}
+.card.hero {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+  color: white;
+  border: none;
+  box-shadow: var(--shadow);
+  padding: 18px;
+}
+.card.hero h2 { font-size: 18px; margin-bottom: 4px; }
+.card.hero p { font-size: 13px; opacity: .9; }
+
+/* ----- Forms ----- */
+.field { margin-bottom: 14px; }
+.field label {
+  display: block; font-size: 12px; font-weight: 600;
+  color: var(--text-muted); margin-bottom: 6px;
+  text-transform: uppercase; letter-spacing: .05em;
+}
+.field input, .field select, .field textarea {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: 15px;
+  font-family: inherit;
+  color: var(--text);
+  transition: border-color .15s, box-shadow .15s;
+  -webkit-appearance: none; appearance: none;
+}
+.field input:focus, .field select:focus, .field textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(31,56,100,.12);
+}
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.field-hint { font-size: 12px; color: var(--text-light); margin-top: 4px; }
+
+/* ----- Buttons ----- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 11px 18px;
+  font-size: 14px; font-weight: 600;
+  border: none; border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: var(--primary); color: white;
+  transition: transform .1s, box-shadow .1s, background .15s;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.btn:active { transform: scale(.97); }
+.btn:hover { background: var(--primary-dark); }
+.btn.full { width: 100%; }
+.btn.secondary { background: var(--surface); color: var(--primary); border: 1.5px solid var(--border-strong); }
+.btn.secondary:hover { background: var(--surface-2); border-color: var(--primary); }
+.btn.success { background: var(--success); }
+.btn.success:hover { background: #15803D; }
+.btn.danger { background: var(--danger); }
+.btn.danger:hover { background: #B91C1C; }
+.btn.ghost { background: transparent; color: var(--text-muted); }
+.btn.ghost:hover { background: var(--surface-2); color: var(--text); }
+.btn.sm { padding: 7px 12px; font-size: 13px; }
+.btn.icon-only { padding: 8px; min-width: 36px; }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ----- Member list ----- */
+.member-list { display: flex; flex-direction: column; gap: 8px; }
+.member-row {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  display: flex; align-items: center; gap: 12px;
+  transition: border-color .15s;
+}
+.member-row:hover { border-color: var(--border-strong); }
+.member-row .num {
+  width: 32px; height: 32px; border-radius: 8px;
+  background: var(--primary); color: white;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 13px;
+  flex-shrink: 0;
+}
+.member-row .info { flex: 1; min-width: 0; }
+.member-row .info .name { font-weight: 600; font-size: 15px; }
+.member-row .info .meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.member-row .info .meta span:not(:last-child)::after { content: " · "; color: var(--text-light); }
+.member-row .actions { display: flex; gap: 4px; flex-shrink: 0; }
+.member-row .icon-btn {
+  width: 34px; height: 34px; border-radius: 8px; border: none;
+  background: var(--surface-2); cursor: pointer; color: var(--text-muted);
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s, color .15s;
+}
+.member-row .icon-btn:hover { background: var(--border); color: var(--text); }
+.member-row .icon-btn.danger:hover { background: var(--danger-bg); color: var(--danger); }
+.member-row .icon-btn svg { width: 16px; height: 16px; }
+
+/* ----- Empty state ----- */
+.empty {
+  text-align: center; padding: 40px 20px;
+  color: var(--text-muted);
+}
+.empty .icon { font-size: 44px; margin-bottom: 8px; opacity: .6; }
+.empty h3 { color: var(--text); font-size: 16px; margin-bottom: 4px; }
+.empty p { font-size: 13px; margin-bottom: 16px; }
+
+/* ----- Marking table ----- */
+.mark-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
+}
+.mark-table {
+  border-collapse: separate; border-spacing: 0;
+  width: 100%;
+  font-size: 13px;
+}
+.mark-table th, .mark-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  text-align: center;
+  background: var(--surface);
+  white-space: nowrap;
+}
+.mark-table th {
+  background: var(--primary); color: white;
+  font-weight: 700; font-size: 12px;
+  position: sticky; top: 0; z-index: 3;
+  letter-spacing: .02em;
+}
+.mark-table th:first-child, .mark-table td:first-child {
+  position: sticky; left: 0;
+  text-align: left;
+  min-width: 180px; max-width: 220px;
+  white-space: normal;
+  z-index: 2;
+  border-right: 2px solid var(--border-strong);
+}
+.mark-table th:first-child { z-index: 4; }
+.mark-table td:first-child .name { font-weight: 600; font-size: 13px; line-height: 1.3; }
+.mark-table td:first-child .sub { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+.mark-table tr:nth-child(even) td { background: var(--surface-2); }
+.mark-table tr:nth-child(even) td:first-child { background: var(--surface-2); }
+.mark-table tr:nth-child(odd) td:first-child { background: var(--surface); }
+
+.att-select {
+  border: 1.5px solid var(--border-strong);
+  background: var(--surface);
+  border-radius: 6px;
+  padding: 6px 4px;
+  font-size: 12px; font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  width: 92px; max-width: 100%;
+  text-align: center;
+  text-align-last: center;
+  -webkit-appearance: none; appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='%2364748B'><path d='M1 1 L6 6 L11 1' stroke='%2364748B' stroke-width='1.5' fill='none' stroke-linecap='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  background-size: 9px;
+  padding-right: 18px;
+}
+.att-select.PRESENT { background-color: var(--success-bg); color: var(--success-text); border-color: var(--success); }
+.att-select.ABSENT { background-color: var(--danger-bg); color: var(--danger-text); border-color: var(--danger); }
+.att-select.HALFDAY { background-color: var(--warning-bg); color: var(--warning-text); border-color: var(--warning); }
+
+.summary-card {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 14px;
+}
+.summary-pill {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 12px 10px; text-align: center;
+}
+.summary-pill .label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
+.summary-pill .value { font-size: 22px; font-weight: 800; margin-top: 4px; }
+.summary-pill.p { background: var(--success-bg); border-color: var(--success); }
+.summary-pill.p .value { color: var(--success-text); }
+.summary-pill.a { background: var(--danger-bg); border-color: var(--danger); }
+.summary-pill.a .value { color: var(--danger-text); }
+.summary-pill.h { background: var(--warning-bg); border-color: var(--warning); }
+.summary-pill.h .value { color: var(--warning-text); }
+
+/* ----- FAB ----- */
+.fab {
+  position: fixed;
+  right: 18px;
+  bottom: calc(82px + var(--safe-bottom));
+  width: 54px; height: 54px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: white;
+  border: none;
+  box-shadow: 0 8px 20px rgba(245,158,11,.4);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 30;
+  transition: transform .15s;
+}
+.fab:active { transform: scale(.92); }
+.fab svg { width: 24px; height: 24px; }
+
+/* ----- Bottom nav ----- */
+.bottom-nav {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 6px 4px calc(6px + var(--safe-bottom));
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  z-index: 40;
+  box-shadow: 0 -4px 20px rgba(15,23,42,.06);
+}
+.bottom-nav button {
+  background: none; border: none;
+  padding: 8px 4px; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  color: var(--text-light);
+  font-size: 11px; font-weight: 600;
+  font-family: inherit;
+  border-radius: var(--radius-sm);
+  transition: color .15s, background .15s;
+}
+.bottom-nav button svg { width: 22px; height: 22px; }
+.bottom-nav button:hover { background: var(--surface-2); }
+.bottom-nav button.active { color: var(--primary); }
+.bottom-nav button.active svg { stroke: var(--primary); }
+
+/* ----- Modal ----- */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(15,23,42,.5);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100;
+  padding: 16px;
+  animation: overlayIn .2s ease;
+  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+}
+@keyframes overlayIn { from { opacity: 0; } to { opacity: 1; }}
+.modal {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  width: 100%; max-width: 460px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+  animation: modalIn .25s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes modalIn { from { opacity: 0; transform: scale(.92) translateY(20px);} to { opacity: 1; transform: none;}}
+.modal-head {
+  padding: 18px 20px 8px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.modal-head h3 { font-size: 17px; font-weight: 700; }
+.modal-head .close {
+  background: var(--surface-2); border: none; cursor: pointer;
+  width: 32px; height: 32px; border-radius: 8px;
+  font-size: 20px; color: var(--text-muted);
+  display: flex; align-items: center; justify-content: center;
+}
+.modal-body { padding: 18px 20px; }
+.modal-foot {
+  padding: 12px 20px 18px;
+  display: flex; gap: 10px; justify-content: flex-end;
+}
+
+/* ----- Toast ----- */
+.toast-root {
+  position: fixed; left: 50%; top: calc(70px + var(--safe-top)); transform: translateX(-50%);
+  z-index: 200; display: flex; flex-direction: column; gap: 8px; pointer-events: none;
+}
+.toast {
+  padding: 10px 16px;
+  background: var(--text); color: white;
+  border-radius: 999px;
+  font-size: 13px; font-weight: 600;
+  box-shadow: var(--shadow-lg);
+  animation: toastIn .25s ease, toastOut .3s ease 2s forwards;
+  display: flex; align-items: center; gap: 8px;
+  pointer-events: auto;
+  max-width: calc(100vw - 32px);
+}
+.toast.success { background: var(--success); }
+.toast.error { background: var(--danger); }
+.toast.info { background: var(--primary); }
+@keyframes toastIn { from { opacity: 0; transform: translateY(-12px);} to { opacity:1;}}
+@keyframes toastOut { to { opacity: 0; transform: translateY(-12px);}}
+
+/* ----- Utility ----- */
+.text-center { text-align: center; }
+.muted { color: var(--text-muted); }
+.divider { height: 1px; background: var(--border); margin: 14px 0; border: 0; }
+.danger-zone {
+  border: 1.5px dashed var(--danger);
+  border-radius: var(--radius);
+  padding: 14px;
+  background: #FEF2F2;
+}
+.danger-zone h4 { color: var(--danger-text); font-size: 14px; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+.danger-zone p { font-size: 12px; color: var(--danger-text); margin-bottom: 10px; opacity: .85; }
+
+footer.credit {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-light);
+  padding: 12px 16px 20px;
+  margin-top: 12px;
+}
+footer.credit b { color: var(--primary); font-weight: 700; }
+
+/* ----- Responsive ----- */
+@media (min-width: 720px) {
+  .topbar { padding-left: 24px; padding-right: 24px; }
+  main { padding: 22px 18px 100px; }
+  .field-row { gap: 14px; }
+}
+
+/* ----- Print ----- */
+@media print {
+  .topbar, .bottom-nav, .fab, .btn, .toast-root { display: none !important; }
+  .tab { display: block !important; }
+}
+</style>
+</head>
+
+<body>
+
+<!-- Top bar -->
+<header class="topbar">
+  <div class="logo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+  </div>
+  <div class="titles">
+    <h1>Hazri</h1>
+    <p>Attendance Manager</p>
+  </div>
+  <div class="stats" id="topStats"></div>
+</header>
+
+<main>
+
+  <!-- ============ SETUP ============ -->
+  <section class="tab active" data-tab="setup">
+    <div class="card hero">
+      <h2>👋 Welcome to Hazri</h2>
+      <p>Set up your attendance sheet header — the place, the cohort, and the date range you want to track.</p>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Header Configuration</div>
+
+      <div class="field">
+        <label>Sheet Title</label>
+        <input id="cfgTitle" type="text" placeholder="e.g. Attendance Sheet" maxlength="80">
+        <div class="field-hint">Shown as the gold accent banner</div>
+      </div>
+
+      <div class="field">
+        <label>Place / Institute</label>
+        <input id="cfgPlace" type="text" placeholder="e.g. MNNIT Allahabad" maxlength="100">
+        <div class="field-hint">The big main banner at the top</div>
+      </div>
+
+      <div class="field">
+        <label>Cohort / Batch</label>
+        <input id="cfgCohort" type="text" placeholder="e.g. PGT Mathematics" maxlength="80">
+        <div class="field-hint">Shown as subtitle below the place</div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label>From Date</label>
+          <input id="cfgFrom" type="date">
+        </div>
+        <div class="field">
+          <label>To Date</label>
+          <input id="cfgTo" type="date">
+        </div>
+      </div>
+      <div class="field-hint" style="margin-top:-8px;margin-bottom:14px;">A column will be created for each day in this range.</div>
+
+      <button class="btn full" id="btnSaveConfig">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        Save Configuration
+      </button>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Live Preview</div>
+      <div id="previewBox" style="border-radius:8px;overflow:hidden;border:1px solid var(--border);font-family:Arial,sans-serif;"></div>
+    </div>
+  </section>
+
+  <!-- ============ MEMBERS ============ -->
+  <section class="tab" data-tab="members">
+    <div class="card">
+      <div class="section-title">
+        Members <span class="badge" id="memberCount">0</span>
+      </div>
+      <div class="btn-row" style="margin-bottom:14px;">
+        <button class="btn secondary sm" id="btnAddMember">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Manually
+        </button>
+        <button class="btn secondary sm" id="btnImport">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Import Excel/CSV
+        </button>
+        <input id="fileInput" type="file" accept=".xlsx,.xls,.csv" style="display:none">
+      </div>
+      <div id="memberList"></div>
+    </div>
+
+    <div class="card" style="background:var(--surface-2)">
+      <div class="section-title">📥 Import Format</div>
+      <p style="font-size:13px;color:var(--text-muted);line-height:1.55;">
+        Upload an Excel <b>(.xlsx)</b> or CSV file with columns:<br>
+        <b style="color:var(--text)">S.No · Name · KV Code · School Name</b><br>
+        <span style="color:var(--text-light);font-size:12px;">(Header row is auto-detected. S.No column is optional.)</span>
+      </p>
+    </div>
+  </section>
+
+  <!-- ============ MARK ATTENDANCE ============ -->
+  <section class="tab" data-tab="mark">
+    <div class="card">
+      <div class="section-title">Mark Attendance</div>
+      <div id="markStatus" style="font-size:13px;color:var(--text-muted);margin-bottom:12px;"></div>
+      <div id="markBody"></div>
+    </div>
+
+    <div id="summaryWrap" style="display:none;">
+      <div class="section-title">Daily Summary</div>
+      <div id="summaryBody"></div>
+    </div>
+  </section>
+
+  <!-- ============ EXPORT ============ -->
+  <section class="tab" data-tab="export">
+    <div class="card">
+      <div class="section-title">Download Attendance</div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">
+        Export the current attendance sheet — preserves your custom header, all members, and every marked status.
+      </p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <button class="btn full" id="btnExportXlsx" style="background:#1F7A3A;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Excel (.xlsx)
+        </button>
+        <button class="btn full" id="btnExportPdf" style="background:#B91C1C;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          PDF
+        </button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Backup &amp; Restore</div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">
+        Download all your data as a JSON backup file, or restore from a previous backup.
+      </p>
+      <div class="btn-row">
+        <button class="btn secondary sm" id="btnBackup">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Backup JSON
+        </button>
+        <button class="btn secondary sm" id="btnRestore">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Restore
+        </button>
+        <input id="restoreInput" type="file" accept=".json" style="display:none">
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="danger-zone">
+        <h4>⚠️ Danger Zone</h4>
+        <p>These actions cannot be undone. Make sure to back up first.</p>
+        <div class="btn-row">
+          <button class="btn danger sm" id="btnClearAttendance">Clear Attendance</button>
+          <button class="btn danger sm" id="btnClearMembers">Remove All Members</button>
+          <button class="btn danger sm" id="btnResetAll">Reset Everything</button>
+        </div>
+      </div>
+    </div>
+
+    <footer class="credit">
+      <p>Hazri — Attendance Manager</p>
+      <p>Designed &amp; Developed by <b>Aayush Singh</b></p>
+    </footer>
+  </section>
+
+</main>
+
+<!-- FAB (only on members tab) -->
+<button class="fab" id="fab" style="display:none;" title="Add member">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+</button>
+
+<!-- Bottom navigation -->
+<nav class="bottom-nav">
+  <button data-go="setup" class="active">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    Setup
+  </button>
+  <button data-go="members">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+    Members
+  </button>
+  <button data-go="mark">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+    Mark
+  </button>
+  <button data-go="export">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    Export
+  </button>
+</nav>
+
+<div id="modalRoot"></div>
+<div class="toast-root" id="toastRoot"></div>
+
+<script>
+/* ================================================================
+   HAZRI — Attendance Manager
+   ================================================================ */
+
+const STORAGE_KEY = 'hazri_state_v1';
+
+const DEFAULT_STATE = {
+  config: {
+    title: 'Attendance Sheet',
+    place: 'MNNIT Allahabad',
+    cohort: 'PGT Mathematics',
+    fromDate: '',
+    toDate: ''
+  },
+  members: [],
+  attendance: {} // { memberId: { 'YYYY-MM-DD': 'PRESENT'|'ABSENT'|'HALF DAY' } }
+};
+
+let state = loadState();
+
+/* ----- Persistence ----- */
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return structuredClone(DEFAULT_STATE);
+    const parsed = JSON.parse(raw);
+    return Object.assign(structuredClone(DEFAULT_STATE), parsed, {
+      config: Object.assign({}, DEFAULT_STATE.config, parsed.config || {})
+    });
+  } catch (e) {
+    console.error('Load failed', e);
+    return structuredClone(DEFAULT_STATE);
+  }
+}
+
+function saveState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (e) {
+    showToast('Storage error: ' + e.message, 'error');
+  }
+}
+
+/* ----- Helpers ----- */
+function uid() { return 'm_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+function pad(n) { return String(n).padStart(2, '0'); }
+
+function formatDateShort(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  return `${parseInt(d)}-${parseInt(m)}-${y.slice(2)}`;
+}
+
+function formatDateLong(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-').map(Number);
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${d} ${months[m-1]} ${y}`;
+}
+
+function dateRange(fromIso, toIso) {
+  if (!fromIso || !toIso) return [];
+  const from = new Date(fromIso + 'T00:00:00');
+  const to = new Date(toIso + 'T00:00:00');
+  if (isNaN(from) || isNaN(to) || from > to) return [];
+  const out = [];
+  const cur = new Date(from);
+  let safety = 0;
+  while (cur <= to && safety < 400) {
+    out.push(cur.getFullYear() + '-' + pad(cur.getMonth() + 1) + '-' + pad(cur.getDate()));
+    cur.setDate(cur.getDate() + 1);
+    safety++;
+  }
+  return out;
+}
+
+function escapeHTML(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ----- Toast ----- */
+function showToast(msg, type = 'info') {
+  const root = document.getElementById('toastRoot');
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  root.appendChild(el);
+  setTimeout(() => el.remove(), 2400);
+}
+
+/* ----- Modal ----- */
+function showModal({ title, body, footer, onClose }) {
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = '';
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+
+  const head = document.createElement('div');
+  head.className = 'modal-head';
+  const h3 = document.createElement('h3');
+  h3.textContent = title;
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'close';
+  closeBtn.innerHTML = '×';
+  closeBtn.onclick = close;
+  head.append(h3, closeBtn);
+
+  const bodyEl = document.createElement('div');
+  bodyEl.className = 'modal-body';
+  if (typeof body === 'string') bodyEl.innerHTML = body;
+  else bodyEl.appendChild(body);
+
+  modal.append(head, bodyEl);
+
+  if (footer) {
+    const foot = document.createElement('div');
+    foot.className = 'modal-foot';
+    if (typeof footer === 'string') foot.innerHTML = footer;
+    else if (Array.isArray(footer)) footer.forEach(b => foot.appendChild(b));
+    else foot.appendChild(footer);
+    modal.appendChild(foot);
+  }
+
+  overlay.appendChild(modal);
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+  root.appendChild(overlay);
+
+  function close() {
+    overlay.remove();
+    if (onClose) onClose();
+  }
+  return { close, modal, bodyEl };
+}
+
+function showConfirm(message, onConfirm, danger = false) {
+  const yesBtn = document.createElement('button');
+  yesBtn.className = danger ? 'btn danger' : 'btn';
+  yesBtn.textContent = danger ? 'Yes, do it' : 'Confirm';
+  const noBtn = document.createElement('button');
+  noBtn.className = 'btn secondary';
+  noBtn.textContent = 'Cancel';
+  const m = showModal({
+    title: 'Are you sure?',
+    body: `<p style="color:var(--text);font-size:14px;line-height:1.5;">${escapeHTML(message)}</p>`,
+    footer: [noBtn, yesBtn]
+  });
+  noBtn.onclick = () => m.close();
+  yesBtn.onclick = () => { m.close(); onConfirm(); };
+}
+
+/* ----- Tab navigation ----- */
+function go(tabName) {
+  document.querySelectorAll('section.tab').forEach(s => {
+    s.classList.toggle('active', s.dataset.tab === tabName);
+  });
+  document.querySelectorAll('.bottom-nav button').forEach(b => {
+    b.classList.toggle('active', b.dataset.go === tabName);
+  });
+  document.getElementById('fab').style.display = (tabName === 'members') ? 'flex' : 'none';
+  // Re-render tab content
+  if (tabName === 'mark') renderMark();
+  if (tabName === 'export') renderTopStats();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+document.querySelectorAll('.bottom-nav button').forEach(b => {
+  b.addEventListener('click', () => go(b.dataset.go));
+});
+
+/* ============ SETUP ============ */
+function loadConfigForm() {
+  document.getElementById('cfgTitle').value = state.config.title || '';
+  document.getElementById('cfgPlace').value = state.config.place || '';
+  document.getElementById('cfgCohort').value = state.config.cohort || '';
+  document.getElementById('cfgFrom').value = state.config.fromDate || '';
+  document.getElementById('cfgTo').value = state.config.toDate || '';
+  renderPreview();
+}
+
+function renderPreview() {
+  const c = state.config;
+  const dates = dateRange(c.fromDate, c.toDate);
+  const dateLine = dates.length
+    ? `${formatDateShort(c.fromDate)} to ${formatDateShort(c.toDate)} (${dates.length} day${dates.length>1?'s':''})`
+    : 'No date range set';
+  document.getElementById('previewBox').innerHTML = `
+    <div style="background:#1F3864;color:white;text-align:center;padding:14px 8px;font-weight:700;font-size:15px;letter-spacing:.02em;">
+      ${escapeHTML((c.place || 'YOUR PLACE HERE').toUpperCase())}
+    </div>
+    <div style="background:#2C4F8B;color:white;text-align:center;padding:8px;font-weight:600;font-size:12px;">
+      ${escapeHTML((c.cohort || 'YOUR COHORT').toUpperCase())}
+    </div>
+    <div style="background:#FFE699;color:#1F3864;text-align:center;padding:8px;font-weight:700;font-size:12px;">
+      ${escapeHTML((c.title || 'ATTENDANCE SHEET').toUpperCase())} — ${escapeHTML(dateLine.toUpperCase())}
+    </div>`;
+}
+
+document.getElementById('btnSaveConfig').addEventListener('click', () => {
+  const newCfg = {
+    title: document.getElementById('cfgTitle').value.trim(),
+    place: document.getElementById('cfgPlace').value.trim(),
+    cohort: document.getElementById('cfgCohort').value.trim(),
+    fromDate: document.getElementById('cfgFrom').value,
+    toDate: document.getElementById('cfgTo').value
+  };
+  if (!newCfg.place) { showToast('Place is required', 'error'); return; }
+  if (newCfg.fromDate && newCfg.toDate && newCfg.fromDate > newCfg.toDate) {
+    showToast('From date must be before To date', 'error'); return;
+  }
+  state.config = newCfg;
+  saveState();
+  renderPreview();
+  renderTopStats();
+  showToast('Configuration saved', 'success');
+});
+
+['cfgTitle','cfgPlace','cfgCohort','cfgFrom','cfgTo'].forEach(id => {
+  document.getElementById(id).addEventListener('input', renderPreview);
+});
+
+/* ============ MEMBERS ============ */
+function renderMembers() {
+  const list = document.getElementById('memberList');
+  document.getElementById('memberCount').textContent = state.members.length;
+  if (state.members.length === 0) {
+    list.innerHTML = `<div class="empty">
+      <div class="icon">👥</div>
+      <h3>No members yet</h3>
+      <p>Add manually or import from an Excel/CSV file.</p>
+    </div>`;
+    return;
+  }
+  list.innerHTML = state.members.map((m, i) => `
+    <div class="member-row" data-id="${m.id}">
+      <div class="num">${i + 1}</div>
+      <div class="info">
+        <div class="name">${escapeHTML(m.name)}</div>
+        <div class="meta">
+          ${m.kvCode ? `<span>KV ${escapeHTML(m.kvCode)}</span>` : ''}
+          ${m.school ? `<span>${escapeHTML(m.school)}</span>` : ''}
+        </div>
+      </div>
+      <div class="actions">
+        <button class="icon-btn" data-act="edit" title="Edit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="icon-btn danger" data-act="delete" title="Delete">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
+        </button>
+      </div>
+    </div>
+  `).join('');
+  list.querySelectorAll('.member-row').forEach(row => {
+    const id = row.dataset.id;
+    row.querySelector('[data-act="edit"]').onclick = () => openMemberDialog(id);
+    row.querySelector('[data-act="delete"]').onclick = () => {
+      const m = state.members.find(x => x.id === id);
+      showConfirm(`Remove "${m.name}" from the list?`, () => {
+        state.members = state.members.filter(x => x.id !== id);
+        delete state.attendance[id];
+        saveState(); renderMembers(); renderTopStats();
+        showToast('Member removed', 'success');
+      }, true);
+    };
+  });
+}
+
+function openMemberDialog(editId) {
+  const m = editId ? state.members.find(x => x.id === editId) : null;
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `
+    <div class="field">
+      <label>Name *</label>
+      <input id="mfName" type="text" placeholder="Full name" maxlength="80" value="${m ? escapeHTML(m.name) : ''}">
+    </div>
+    <div class="field">
+      <label>KV Code</label>
+      <input id="mfCode" type="text" placeholder="e.g. 1821" maxlength="20" value="${m ? escapeHTML(m.kvCode) : ''}">
+    </div>
+    <div class="field">
+      <label>School Name</label>
+      <input id="mfSchool" type="text" placeholder="e.g. Kendriya Vidyalaya …" maxlength="120" value="${m ? escapeHTML(m.school) : ''}">
+    </div>`;
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'btn'; saveBtn.textContent = m ? 'Save Changes' : 'Add Member';
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'btn secondary'; cancelBtn.textContent = 'Cancel';
+  const dlg = showModal({
+    title: m ? 'Edit Member' : 'Add Member',
+    body: wrap,
+    footer: [cancelBtn, saveBtn]
+  });
+  cancelBtn.onclick = () => dlg.close();
+  setTimeout(() => document.getElementById('mfName').focus(), 50);
+  saveBtn.onclick = () => {
+    const name = document.getElementById('mfName').value.trim();
+    const kvCode = document.getElementById('mfCode').value.trim();
+    const school = document.getElementById('mfSchool').value.trim();
+    if (!name) { showToast('Name is required', 'error'); return; }
+    if (m) {
+      Object.assign(m, { name, kvCode, school });
+      showToast('Member updated', 'success');
+    } else {
+      state.members.push({ id: uid(), name, kvCode, school });
+      showToast('Member added', 'success');
+    }
+    saveState(); renderMembers(); renderTopStats();
+    dlg.close();
+  };
+}
+
+document.getElementById('btnAddMember').addEventListener('click', () => openMemberDialog());
+document.getElementById('fab').addEventListener('click', () => openMemberDialog());
+
+/* ----- Import ----- */
+document.getElementById('btnImport').addEventListener('click', () => {
+  document.getElementById('fileInput').click();
+});
+
+document.getElementById('fileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  e.target.value = '';
+  try {
+    const data = await file.arrayBuffer();
+    const wb = XLSX.read(data, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', blankrows: false });
+    if (!rows.length) { showToast('File is empty', 'error'); return; }
+
+    // Detect header row
+    let headerIdx = -1;
+    for (let i = 0; i < Math.min(3, rows.length); i++) {
+      const joined = rows[i].map(x => String(x).toLowerCase()).join(' ');
+      if (/name|teacher/.test(joined) && /school|kv|code/.test(joined)) {
+        headerIdx = i; break;
+      }
+    }
+    let nameCol = -1, codeCol = -1, schoolCol = -1;
+    if (headerIdx >= 0) {
+      rows[headerIdx].forEach((h, idx) => {
+        const s = String(h).toLowerCase();
+        if (nameCol < 0 && /name/.test(s)) nameCol = idx;
+        if (codeCol < 0 && /(code|kv)/.test(s)) codeCol = idx;
+        if (schoolCol < 0 && /school/.test(s)) schoolCol = idx;
+      });
+    }
+    const dataRows = rows.slice(headerIdx + 1).filter(r => r.some(c => String(c).trim()));
+    if (nameCol < 0 || schoolCol < 0) {
+      // Fallback by position: assume order [S.No, Name, KV, School] or [Name, KV, School]
+      const ncols = dataRows[0] ? dataRows[0].length : 0;
+      if (ncols >= 4) { nameCol = 1; codeCol = 2; schoolCol = 3; }
+      else if (ncols === 3) { nameCol = 0; codeCol = 1; schoolCol = 2; }
+      else if (ncols === 2) { nameCol = 0; schoolCol = 1; codeCol = -1; }
+      else { showToast('Could not detect columns. Expected: S.No, Name, KV Code, School', 'error'); return; }
+    }
+    const newMembers = dataRows.map(r => ({
+      id: uid(),
+      name: String(r[nameCol] || '').trim(),
+      kvCode: codeCol >= 0 ? String(r[codeCol] || '').trim() : '',
+      school: String(r[schoolCol] || '').trim()
+    })).filter(m => m.name);
+
+    if (!newMembers.length) { showToast('No valid rows found', 'error'); return; }
+
+    // Show preview / mode picker
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `
+      <p style="font-size:14px;margin-bottom:10px;">Found <b>${newMembers.length}</b> member(s) in the file.</p>
+      <div style="background:var(--surface-2);border-radius:8px;padding:10px;max-height:200px;overflow:auto;font-size:12.5px;line-height:1.5;">
+        ${newMembers.slice(0, 10).map((m, i) =>
+          `<div style="border-bottom:1px solid var(--border);padding:4px 0;">
+            <b>${i+1}.</b> ${escapeHTML(m.name)}
+            ${m.kvCode ? `· <span style="color:var(--text-muted)">KV ${escapeHTML(m.kvCode)}</span>` : ''}
+            ${m.school ? `· <span style="color:var(--text-muted)">${escapeHTML(m.school)}</span>` : ''}
+          </div>`
+        ).join('')}
+        ${newMembers.length > 10 ? `<div style="padding:6px 0;color:var(--text-muted);font-style:italic;">… and ${newMembers.length - 10} more</div>` : ''}
+      </div>
+      <p style="font-size:13px;margin-top:12px;color:var(--text-muted);">Choose how to import:</p>
+    `;
+    const appendBtn = document.createElement('button');
+    appendBtn.className = 'btn'; appendBtn.textContent = `Append (current ${state.members.length})`;
+    const replaceBtn = document.createElement('button');
+    replaceBtn.className = 'btn danger'; replaceBtn.textContent = 'Replace All';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn secondary'; cancelBtn.textContent = 'Cancel';
+    const dlg = showModal({ title: 'Import Members', body: wrap, footer: [cancelBtn, replaceBtn, appendBtn] });
+    cancelBtn.onclick = () => dlg.close();
+    appendBtn.onclick = () => {
+      state.members = state.members.concat(newMembers);
+      saveState(); renderMembers(); renderTopStats();
+      showToast(`${newMembers.length} members appended`, 'success');
+      dlg.close();
+    };
+    replaceBtn.onclick = () => {
+      state.members = newMembers;
+      state.attendance = {};
+      saveState(); renderMembers(); renderTopStats();
+      showToast(`Replaced with ${newMembers.length} members`, 'success');
+      dlg.close();
+    };
+  } catch (err) {
+    console.error(err);
+    showToast('Import failed: ' + err.message, 'error');
+  }
+});
+
+/* ============ MARK ATTENDANCE ============ */
+function renderMark() {
+  const dates = dateRange(state.config.fromDate, state.config.toDate);
+  const status = document.getElementById('markStatus');
+  const body = document.getElementById('markBody');
+  const sumWrap = document.getElementById('summaryWrap');
+
+  if (!state.config.fromDate || !state.config.toDate) {
+    status.textContent = '';
+    body.innerHTML = `<div class="empty">
+      <div class="icon">📅</div><h3>Set up dates first</h3>
+      <p>Go to the Setup tab and pick a From / To date.</p>
+      <button class="btn" onclick="go('setup')">Open Setup</button>
+    </div>`;
+    sumWrap.style.display = 'none';
+    return;
+  }
+  if (state.members.length === 0) {
+    status.textContent = '';
+    body.innerHTML = `<div class="empty">
+      <div class="icon">👥</div><h3>No members yet</h3>
+      <p>Add or import members to start marking.</p>
+      <button class="btn" onclick="go('members')">Open Members</button>
+    </div>`;
+    sumWrap.style.display = 'none';
+    return;
+  }
+  if (dates.length === 0) {
+    status.textContent = '';
+    body.innerHTML = `<div class="empty"><div class="icon">⚠️</div><h3>Invalid date range</h3><p>From-date is after To-date.</p></div>`;
+    sumWrap.style.display = 'none';
+    return;
+  }
+
+  status.innerHTML = `<b>${state.members.length}</b> member${state.members.length>1?'s':''} · <b>${dates.length}</b> day${dates.length>1?'s':''} · Tap any cell to mark`;
+
+  const head = `<tr>
+    <th>Member</th>
+    ${dates.map(d => `<th>${escapeHTML(formatDateShort(d))}</th>`).join('')}
+  </tr>`;
+
+  const rows = state.members.map((m, i) => `
+    <tr data-mid="${m.id}">
+      <td>
+        <div class="name">${i+1}. ${escapeHTML(m.name)}</div>
+        ${(m.kvCode || m.school) ? `<div class="sub">${m.kvCode ? 'KV '+escapeHTML(m.kvCode) : ''}${m.kvCode && m.school ? ' · ' : ''}${escapeHTML(m.school || '')}</div>` : ''}
+      </td>
+      ${dates.map(d => {
+        const cur = (state.attendance[m.id] || {})[d] || '';
+        const cls = cur === 'PRESENT' ? 'PRESENT' : cur === 'ABSENT' ? 'ABSENT' : cur === 'HALF DAY' ? 'HALFDAY' : '';
+        return `<td>
+          <select class="att-select ${cls}" data-mid="${m.id}" data-date="${d}">
+            <option value=""${cur===''?' selected':''}>—</option>
+            <option value="PRESENT"${cur==='PRESENT'?' selected':''}>P</option>
+            <option value="ABSENT"${cur==='ABSENT'?' selected':''}>A</option>
+            <option value="HALF DAY"${cur==='HALF DAY'?' selected':''}>H</option>
+          </select>
+        </td>`;
+      }).join('')}
+    </tr>
+  `).join('');
+
+  body.innerHTML = `<div class="mark-wrap"><table class="mark-table"><thead>${head}</thead><tbody>${rows}</tbody></table></div>
+    <div style="font-size:12px;color:var(--text-muted);margin-top:8px;">P = Present · A = Absent · H = Half Day · Auto-saves on every change.</div>`;
+
+  body.querySelectorAll('.att-select').forEach(sel => {
+    sel.addEventListener('change', () => {
+      const mid = sel.dataset.mid;
+      const d = sel.dataset.date;
+      const v = sel.value;
+      if (!state.attendance[mid]) state.attendance[mid] = {};
+      if (v) state.attendance[mid][d] = v;
+      else delete state.attendance[mid][d];
+      saveState();
+      // Update cell color class
+      sel.className = 'att-select ' + (v === 'PRESENT' ? 'PRESENT' : v === 'ABSENT' ? 'ABSENT' : v === 'HALF DAY' ? 'HALFDAY' : '');
+      renderSummary(dates);
+    });
+  });
+
+  sumWrap.style.display = 'block';
+  renderSummary(dates);
+}
+
+function renderSummary(dates) {
+  const body = document.getElementById('summaryBody');
+  if (!dates || !dates.length) { body.innerHTML = ''; return; }
+
+  const summary = dates.map(d => {
+    let p = 0, a = 0, h = 0;
+    state.members.forEach(m => {
+      const v = (state.attendance[m.id] || {})[d];
+      if (v === 'PRESENT') p++; else if (v === 'ABSENT') a++; else if (v === 'HALF DAY') h++;
+    });
+    return { d, p, a, h };
+  });
+
+  body.innerHTML = summary.map(s => `
+    <div class="card" style="padding:12px;margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <b style="font-size:14px;">${formatDateLong(s.d)}</b>
+        <span style="font-size:12px;color:var(--text-muted);">${formatDateShort(s.d)}</span>
+      </div>
+      <div class="summary-card">
+        <div class="summary-pill p"><div class="label">Present</div><div class="value">${s.p}</div></div>
+        <div class="summary-pill a"><div class="label">Absent</div><div class="value">${s.a}</div></div>
+        <div class="summary-pill h"><div class="label">Half Day</div><div class="value">${s.h}</div></div>
+      </div>
+    </div>
+  `).join('');
+}
+
+/* ============ TOP STATS ============ */
+function renderTopStats() {
+  const dates = dateRange(state.config.fromDate, state.config.toDate);
+  document.getElementById('topStats').innerHTML = `
+    <b>${state.members.length}</b> members
+    <span style="opacity:.7">· ${dates.length} day${dates.length===1?'':'s'}</span>
+  `;
+}
+
+/* ============ EXPORT TO XLSX ============ */
+function buildAttendanceWorkbook() {
+  const cfg = state.config;
+  const dates = dateRange(cfg.fromDate, cfg.toDate);
+  const totalCols = 4 + dates.length;
+
+  const lastColLetter = XLSX.utils.encode_col(totalCols - 1);
+
+  const NAVY = '1F3864';
+  const NAVY_LIGHT = '2C4F8B';
+  const GOLD = 'FFE699';
+  const LIGHT = 'D9E1F2';
+  const GREY = 'F2F2F2';
+
+  const border = {
+    top:    { style: 'thin', color: { rgb: '000000' } },
+    bottom: { style: 'thin', color: { rgb: '000000' } },
+    left:   { style: 'thin', color: { rgb: '000000' } },
+    right:  { style: 'thin', color: { rgb: '000000' } }
+  };
+  const borderM = {
+    top:    { style: 'medium', color: { rgb: '000000' } },
+    bottom: { style: 'medium', color: { rgb: '000000' } },
+    left:   { style: 'medium', color: { rgb: '000000' } },
+    right:  { style: 'medium', color: { rgb: '000000' } }
+  };
+
+  const ws = {};
+  const merges = [];
+
+  function set(addr, value, style) {
+    ws[addr] = { v: value, t: typeof value === 'number' ? 'n' : 's', s: style };
+  }
+  function setF(addr, formula, style) {
+    ws[addr] = { v: 0, t: 'n', f: formula, s: style };
+  }
+
+  // Banner row 1: Place
+  set('A1', (cfg.place || 'PLACE').toUpperCase(), {
+    font: { name: 'Arial', bold: true, sz: 18, color: { rgb: 'FFFFFF' } },
+    fill: { patternType: 'solid', fgColor: { rgb: NAVY } },
+    alignment: { horizontal: 'center', vertical: 'center' },
+    border: borderM
+  });
+  for (let c = 1; c < totalCols; c++) {
+    ws[XLSX.utils.encode_cell({ r: 0, c })] = { v: '', t: 's',
+      s: { fill: { patternType: 'solid', fgColor: { rgb: NAVY } }, border: borderM } };
+  }
+  merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: totalCols - 1 } });
+
+  // Banner row 2: Cohort
+  set('A2', (cfg.cohort || 'COHORT').toUpperCase(), {
+    font: { name: 'Arial', bold: true, sz: 12, color: { rgb: 'FFFFFF' } },
+    fill: { patternType: 'solid', fgColor: { rgb: NAVY_LIGHT } },
+    alignment: { horizontal: 'center', vertical: 'center' },
+    border: borderM
+  });
+  for (let c = 1; c < totalCols; c++) {
+    ws[XLSX.utils.encode_cell({ r: 1, c })] = { v: '', t: 's',
+      s: { fill: { patternType: 'solid', fgColor: { rgb: NAVY_LIGHT } }, border: borderM } };
+  }
+  merges.push({ s: { r: 1, c: 0 }, e: { r: 1, c: totalCols - 1 } });
+
+  // Banner row 3: Title + dates
+  const dateStr = (cfg.fromDate && cfg.toDate)
+    ? ` — ${formatDateShort(cfg.fromDate)} TO ${formatDateShort(cfg.toDate)}`
+    : '';
+  set('A3', (cfg.title || 'ATTENDANCE SHEET').toUpperCase() + dateStr.toUpperCase(), {
+    font: { name: 'Arial', bold: true, sz: 13, color: { rgb: NAVY } },
+    fill: { patternType: 'solid', fgColor: { rgb: GOLD } },
+    alignment: { horizontal: 'center', vertical: 'center' },
+    border: borderM
+  });
+  for (let c = 1; c < totalCols; c++) {
+    ws[XLSX.utils.encode_cell({ r: 2, c })] = { v: '', t: 's',
+      s: { fill: { patternType: 'solid', fgColor: { rgb: GOLD } }, border: borderM } };
+  }
+  merges.push({ s: { r: 2, c: 0 }, e: { r: 2, c: totalCols - 1 } });
+
+  // Banner row 4: instruction
+  set('A4', 'ATTENDANCE SHEET — PRESENT / ABSENT / HALF DAY', {
+    font: { name: 'Arial', bold: true, italic: true, sz: 11, color: { rgb: '333333' } },
+    fill: { patternType: 'solid', fgColor: { rgb: GREY } },
+    alignment: { horizontal: 'center', vertical: 'center' },
+    border: borderM
+  });
+  for (let c = 1; c < totalCols; c++) {
+    ws[XLSX.utils.encode_cell({ r: 3, c })] = { v: '', t: 's',
+      s: { fill: { patternType: 'solid', fgColor: { rgb: GREY } }, border: borderM } };
+  }
+  merges.push({ s: { r: 3, c: 0 }, e: { r: 3, c: totalCols - 1 } });
+
+  // Spacer row 5 (left blank)
+
+  // Header row 6
+  const HDR = 5; // 0-indexed row 5 = Excel row 6
+  const headers = ['S. NO.', 'NAME', 'KV CODE', 'SCHOOL NAME', ...dates.map(d => formatDateShort(d))];
+  headers.forEach((h, c) => {
+    ws[XLSX.utils.encode_cell({ r: HDR, c })] = {
+      v: h, t: 's',
+      s: {
+        font: { name: 'Arial', bold: true, sz: 11, color: { rgb: 'FFFFFF' } },
+        fill: { patternType: 'solid', fgColor: { rgb: NAVY } },
+        alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+        border: borderM
+      }
+    };
+  });
+
+  // Data rows
+  const DATA_START = HDR + 1; // 0-indexed
+  state.members.forEach((m, i) => {
+    const r = DATA_START + i;
+    const rowFill = (i % 2 === 0) ? 'FFFFFF' : LIGHT;
+    const baseStyle = {
+      font: { name: 'Arial', sz: 10 },
+      fill: { patternType: 'solid', fgColor: { rgb: rowFill } },
+      alignment: { vertical: 'center', wrapText: true },
+      border: border
+    };
+
+    ws[XLSX.utils.encode_cell({ r, c: 0 })] = { v: i + 1, t: 'n',
+      s: { ...baseStyle, alignment: { ...baseStyle.alignment, horizontal: 'center' } } };
+    ws[XLSX.utils.encode_cell({ r, c: 1 })] = { v: (m.name || '').toUpperCase(), t: 's',
+      s: { ...baseStyle, alignment: { ...baseStyle.alignment, horizontal: 'left' } } };
+    ws[XLSX.utils.encode_cell({ r, c: 2 })] = { v: m.kvCode || '', t: 's',
+      s: { ...baseStyle, alignment: { ...baseStyle.alignment, horizontal: 'center' } } };
+    ws[XLSX.utils.encode_cell({ r, c: 3 })] = { v: (m.school || '').toUpperCase(), t: 's',
+      s: { ...baseStyle, alignment: { ...baseStyle.alignment, horizontal: 'left' } } };
+
+    dates.forEach((d, di) => {
+      const v = (state.attendance[m.id] || {})[d] || '';
+      let cellFill = rowFill, fontColor = '000000';
+      if (v === 'PRESENT') { cellFill = 'C6EFCE'; fontColor = '006100'; }
+      else if (v === 'ABSENT') { cellFill = 'FFC7CE'; fontColor = '9C0006'; }
+      else if (v === 'HALF DAY') { cellFill = 'FFEB9C'; fontColor = '9C5700'; }
+      ws[XLSX.utils.encode_cell({ r, c: 4 + di })] = {
+        v: v, t: 's',
+        s: {
+          font: { name: 'Arial', bold: !!v, sz: 10, color: { rgb: fontColor } },
+          fill: { patternType: 'solid', fgColor: { rgb: cellFill } },
+          alignment: { horizontal: 'center', vertical: 'center' },
+          border: border
+        }
+      };
+    });
+  });
+
+  const DATA_END = DATA_START + state.members.length - 1;
+
+  // Summary rows
+  if (state.members.length > 0) {
+    const SUMMARY_START = DATA_END + 2;
+    const labels = ['TOTAL PRESENT', 'TOTAL ABSENT', 'TOTAL HALF DAY'];
+    const crit = ['PRESENT', 'ABSENT', 'HALF DAY'];
+    const fills = ['C6EFCE', 'FFC7CE', 'FFEB9C'];
+    const colors = ['006100', '9C0006', '9C5700'];
+    labels.forEach((lab, li) => {
+      const r = SUMMARY_START + li;
+      // Label spans cols 0..3
+      ws[XLSX.utils.encode_cell({ r, c: 0 })] = {
+        v: lab, t: 's',
+        s: {
+          font: { name: 'Arial', bold: true, sz: 11, color: { rgb: colors[li] } },
+          fill: { patternType: 'solid', fgColor: { rgb: fills[li] } },
+          alignment: { horizontal: 'right', vertical: 'center' },
+          border: borderM
+        }
+      };
+      for (let cc = 1; cc <= 3; cc++) {
+        ws[XLSX.utils.encode_cell({ r, c: cc })] = { v: '', t: 's',
+          s: { fill: { patternType: 'solid', fgColor: { rgb: fills[li] } }, border: borderM } };
+      }
+      merges.push({ s: { r, c: 0 }, e: { r, c: 3 } });
+
+      dates.forEach((_, di) => {
+        const col = XLSX.utils.encode_col(4 + di);
+        const formula = `COUNTIF(${col}${DATA_START + 1}:${col}${DATA_END + 1},"${crit[li]}")`;
+        ws[XLSX.utils.encode_cell({ r, c: 4 + di })] = {
+          v: 0, t: 'n', f: formula,
+          s: {
+            font: { name: 'Arial', bold: true, sz: 11, color: { rgb: colors[li] } },
+            fill: { patternType: 'solid', fgColor: { rgb: fills[li] } },
+            alignment: { horizontal: 'center', vertical: 'center' },
+            border: borderM
+          }
+        };
+      });
+    });
+  }
+
+  // Worksheet config
+  const lastRow = Math.max(DATA_END, 5) + (state.members.length > 0 ? 5 : 1);
+  ws['!ref'] = `A1:${lastColLetter}${lastRow}`;
+  ws['!merges'] = merges;
+  ws['!cols'] = [
+    { wch: 7 },   // S No
+    { wch: 28 },  // Name
+    { wch: 10 },  // KV Code
+    { wch: 42 },  // School
+    ...dates.map(() => ({ wch: 13 }))
+  ];
+  ws['!rows'] = [
+    { hpt: 32 }, { hpt: 22 }, { hpt: 24 }, { hpt: 20 }, { hpt: 6 }, { hpt: 30 }
+  ];
+  ws['!margins'] = { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.3, footer: 0.3 };
+  ws['!pageSetup'] = { orientation: 'landscape', paperSize: 9, fitToWidth: 1, fitToHeight: 0 };
+  ws['!printOptions'] = { horizontalCentered: true };
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
+  return wb;
+}
+
+document.getElementById('btnExportXlsx').addEventListener('click', () => {
+  if (!validateForExport()) return;
+  try {
+    const wb = buildAttendanceWorkbook();
+    const fname = makeFileName('xlsx');
+    XLSX.writeFile(wb, fname, { bookType: 'xlsx' });
+    showToast('Excel file downloaded', 'success');
+  } catch (e) {
+    console.error(e);
+    showToast('Export failed: ' + e.message, 'error');
+  }
+});
+
+function validateForExport() {
+  if (state.members.length === 0) {
+    showToast('Add some members first', 'error'); return false;
+  }
+  if (!state.config.fromDate || !state.config.toDate) {
+    showToast('Set up date range first', 'error'); return false;
+  }
+  return true;
+}
+
+function makeFileName(ext) {
+  const cfg = state.config;
+  const place = (cfg.place || 'Attendance').replace(/[^A-Za-z0-9]+/g, '_').slice(0, 30);
+  const cohort = (cfg.cohort || '').replace(/[^A-Za-z0-9]+/g, '_').slice(0, 20);
+  const date = cfg.fromDate ? '_' + cfg.fromDate : '';
+  return [place, cohort].filter(Boolean).join('_') + date + '.' + ext;
+}
+
+/* ============ EXPORT TO PDF ============ */
+document.getElementById('btnExportPdf').addEventListener('click', () => {
+  if (!validateForExport()) return;
+  try {
+    exportPdf();
+    showToast('PDF downloaded', 'success');
+  } catch (e) {
+    console.error(e);
+    showToast('PDF export failed: ' + e.message, 'error');
+  }
+});
+
+function exportPdf() {
+  const { jsPDF } = window.jspdf;
+  const cfg = state.config;
+  const dates = dateRange(cfg.fromDate, cfg.toDate);
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+  const M = 28;
+
+  // Outer borders
+  doc.setLineWidth(2);
+  doc.rect(M - 6, M - 6, W - 2*(M - 6), H - 2*(M - 6));
+  doc.setLineWidth(0.5);
+  doc.rect(M - 2, M - 2, W - 2*(M - 2), H - 2*(M - 2));
+
+  // Banner 1: PLACE
+  let y = M + 4;
+  doc.setFillColor(31, 56, 100);
+  doc.rect(M, y, W - 2*M, 32, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  doc.text((cfg.place || 'PLACE').toUpperCase(), W/2, y + 22, { align: 'center' });
+  y += 32;
+
+  // Banner 2: COHORT
+  doc.setFillColor(44, 79, 139);
+  doc.rect(M, y, W - 2*M, 22, 'F');
+  doc.setFontSize(12);
+  doc.text((cfg.cohort || 'COHORT').toUpperCase(), W/2, y + 15, { align: 'center' });
+  y += 22;
+
+  // Banner 3: TITLE — DATES
+  doc.setFillColor(255, 230, 153);
+  doc.rect(M, y, W - 2*M, 22, 'F');
+  doc.setTextColor(31, 56, 100);
+  doc.setFontSize(12);
+  const dateStr = ` — ${formatDateShort(cfg.fromDate)} TO ${formatDateShort(cfg.toDate)}`;
+  doc.text((cfg.title || 'ATTENDANCE SHEET').toUpperCase() + dateStr.toUpperCase(), W/2, y + 15, { align: 'center' });
+  y += 22 + 8;
+
+  // Build table
+  const head = [['S.No', 'Name', 'KV', 'School', ...dates.map(d => formatDateShort(d))]];
+  const body = state.members.map((m, i) => {
+    const row = [
+      i + 1,
+      (m.name || '').toUpperCase(),
+      m.kvCode || '',
+      (m.school || '').toUpperCase(),
+      ...dates.map(d => (state.attendance[m.id] || {})[d] || '')
+    ];
+    return row;
+  });
+
+  // Summary rows
+  const sumRows = [];
+  const sumCrit = ['PRESENT', 'ABSENT', 'HALF DAY'];
+  const sumLabels = ['TOTAL PRESENT', 'TOTAL ABSENT', 'TOTAL HALF DAY'];
+  sumCrit.forEach((cr, li) => {
+    const counts = dates.map(d => state.members.reduce((acc, m) => acc + (((state.attendance[m.id] || {})[d]) === cr ? 1 : 0), 0));
+    sumRows.push([
+      { content: sumLabels[li], colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } },
+      ...counts.map(n => ({ content: n, styles: { halign: 'center', fontStyle: 'bold' } }))
+    ]);
+  });
+
+  doc.autoTable({
+    head, body: [...body, ...sumRows],
+    startY: y,
+    margin: { left: M, right: M },
+    theme: 'grid',
+    styles: {
+      font: 'helvetica', fontSize: 8.5,
+      cellPadding: 4,
+      lineColor: [0,0,0], lineWidth: 0.4,
+      textColor: [0,0,0],
+      valign: 'middle'
+    },
+    headStyles: {
+      fillColor: [31, 56, 100], textColor: [255,255,255],
+      fontStyle: 'bold', halign: 'center', fontSize: 9
+    },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 30 },
+      1: { halign: 'left', cellWidth: 110 },
+      2: { halign: 'center', cellWidth: 35 },
+      3: { halign: 'left', cellWidth: 'auto' }
+    },
+    didParseCell: function(data) {
+      if (data.section === 'body') {
+        // Color attendance cells for member rows
+        if (data.row.index < state.members.length && data.column.index >= 4) {
+          const v = data.cell.raw;
+          if (v === 'PRESENT') { data.cell.styles.fillColor = [198, 239, 206]; data.cell.styles.textColor = [0, 97, 0]; data.cell.styles.fontStyle = 'bold'; data.cell.styles.halign = 'center'; }
+          else if (v === 'ABSENT') { data.cell.styles.fillColor = [255, 199, 206]; data.cell.styles.textColor = [156, 0, 6]; data.cell.styles.fontStyle = 'bold'; data.cell.styles.halign = 'center'; }
+          else if (v === 'HALF DAY') { data.cell.styles.fillColor = [255, 235, 156]; data.cell.styles.textColor = [156, 87, 0]; data.cell.styles.fontStyle = 'bold'; data.cell.styles.halign = 'center'; }
+          else { data.cell.styles.halign = 'center'; }
+        }
+        // Color summary rows
+        if (data.row.index >= state.members.length) {
+          const li = data.row.index - state.members.length;
+          const fills = [[198,239,206],[255,199,206],[255,235,156]];
+          const colors = [[0,97,0],[156,0,6],[156,87,0]];
+          data.cell.styles.fillColor = fills[li];
+          data.cell.styles.textColor = colors[li];
+          data.cell.styles.fontStyle = 'bold';
+        }
+      }
+    },
+    didDrawPage: function(data) {
+      doc.setFontSize(8); doc.setTextColor(120);
+      doc.text(`Hazri · Page ${doc.internal.getNumberOfPages()}`, W/2, H - 14, { align: 'center' });
+      doc.setTextColor(0);
+    }
+  });
+
+  doc.save(makeFileName('pdf'));
+}
+
+/* ============ BACKUP / RESTORE ============ */
+document.getElementById('btnBackup').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = makeFileName('json'); a.click();
+  URL.revokeObjectURL(url);
+  showToast('Backup downloaded', 'success');
+});
+
+document.getElementById('btnRestore').addEventListener('click', () => {
+  document.getElementById('restoreInput').click();
+});
+
+document.getElementById('restoreInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0]; if (!file) return;
+  e.target.value = '';
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    if (!data.config || !Array.isArray(data.members)) throw new Error('Invalid backup file');
+    showConfirm('This will replace ALL current data with the backup. Continue?', () => {
+      state = Object.assign(structuredClone(DEFAULT_STATE), data, {
+        config: Object.assign({}, DEFAULT_STATE.config, data.config || {})
+      });
+      saveState(); fullRender();
+      showToast('Data restored', 'success');
+    }, true);
+  } catch (err) {
+    showToast('Restore failed: ' + err.message, 'error');
+  }
+});
+
+/* ============ DANGER ZONE ============ */
+document.getElementById('btnClearAttendance').addEventListener('click', () => {
+  showConfirm('Clear all attendance markings? Members and config will stay.', () => {
+    state.attendance = {};
+    saveState(); renderMark();
+    showToast('Attendance cleared', 'success');
+  }, true);
+});
+
+document.getElementById('btnClearMembers').addEventListener('click', () => {
+  showConfirm('Remove all members and their attendance? Configuration will stay.', () => {
+    state.members = []; state.attendance = {};
+    saveState(); fullRender();
+    showToast('All members removed', 'success');
+  }, true);
+});
+
+document.getElementById('btnResetAll').addEventListener('click', () => {
+  showConfirm('Reset EVERYTHING — config, members, and attendance. This cannot be undone.', () => {
+    state = structuredClone(DEFAULT_STATE);
+    localStorage.removeItem(STORAGE_KEY);
+    fullRender();
+    showToast('App reset', 'success');
+    go('setup');
+  }, true);
+});
+
+/* ============ INIT ============ */
+function fullRender() {
+  loadConfigForm();
+  renderMembers();
+  renderTopStats();
+}
+
+window.go = go;
+fullRender();
+
+// Service worker hint for "Add to Home Screen" — make sure first paint is set
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) saveState();
+});
+</script>
+
+</body>
+</html>
