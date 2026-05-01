@@ -257,6 +257,8 @@ main {
 .btn.success:hover { background: #15803D; }
 .btn.danger { background: var(--danger); }
 .btn.danger:hover { background: #B91C1C; }
+.btn.warning { background: var(--warning); color: white; }
+.btn.warning:hover { background: #D97706; }
 .btn.ghost { background: transparent; color: var(--text-muted); }
 .btn.ghost:hover { background: var(--surface-2); color: var(--text); }
 .btn.sm { padding: 7px 12px; font-size: 13px; }
@@ -347,6 +349,41 @@ main {
 .mark-table tr:nth-child(even) td { background: var(--surface-2); }
 .mark-table tr:nth-child(even) td:first-child { background: var(--surface-2); }
 .mark-table tr:nth-child(odd) td:first-child { background: var(--surface); }
+
+/* ----- Bulk-mark button in date header ----- */
+.th-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.th-bulk {
+  background: rgba(255,255,255,.18);
+  border: none;
+  width: 22px; height: 22px;
+  border-radius: 5px;
+  color: white;
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background-color .15s, transform .1s;
+  -webkit-appearance: none; appearance: none;
+  flex-shrink: 0;
+}
+.th-bulk:hover { background: rgba(255,255,255,.32); }
+.th-bulk:active { transform: scale(.9); }
+.th-bulk svg { width: 14px; height: 14px; }
+
+/* Bulk action button list inside modal */
+.bulk-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.bulk-actions .btn { padding: 13px 14px; font-size: 14px; justify-content: flex-start; gap: 10px; }
+.bulk-actions .btn .ico {
+  width: 22px; height: 22px; border-radius: 6px;
+  background: rgba(255,255,255,.22);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 800;
+  flex-shrink: 0;
+}
+.bulk-actions .btn.secondary .ico { background: var(--surface-2); color: var(--text-muted); }
 
 .att-select {
   border: 1.5px solid var(--border-strong);
@@ -1204,11 +1241,18 @@ function renderMark() {
     return;
   }
 
-  status.innerHTML = `<b>${state.members.length}</b> member${state.members.length>1?'s':''} · <b>${dates.length}</b> day${dates.length>1?'s':''} · Tap any cell to mark`;
+  status.innerHTML = `<b>${state.members.length}</b> member${state.members.length>1?'s':''} · <b>${dates.length}</b> day${dates.length>1?'s':''} · Tap any cell to mark · Tap <span style="display:inline-block;background:var(--primary);color:white;padding:1px 5px;border-radius:4px;font-weight:700;">⋮</span> on a date for bulk actions`;
 
   const head = `<tr>
     <th>Member</th>
-    ${dates.map(d => `<th>${escapeHTML(formatDateShort(d))}</th>`).join('')}
+    ${dates.map(d => `<th>
+      <div class="th-content">
+        <span>${escapeHTML(formatDateShort(d))}</span>
+        <button class="th-bulk" data-bulk-date="${d}" aria-label="Bulk mark for ${formatDateShort(d)}" title="Bulk mark all members">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="6" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="12" cy="18" r="1.2"/></svg>
+        </button>
+      </div>
+    </th>`).join('')}
   </tr>`;
 
   const rows = state.members.map((m, i) => `
@@ -1250,7 +1294,77 @@ function renderMark() {
     });
   });
 
+  // Bulk mark per date
+  body.querySelectorAll('.th-bulk').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openBulkMarkModal(btn.dataset.bulkDate);
+    });
+  });
+
   sumWrap.style.display = 'block';
+  renderSummary(dates);
+}
+
+function openBulkMarkModal(date) {
+  if (!state.members.length) return;
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `
+    <p style="font-size:14px;color:var(--text-muted);margin-bottom:14px;line-height:1.5;">
+      Apply to <b style="color:var(--text);">all ${state.members.length} member${state.members.length>1?'s':''}</b>
+      for <b style="color:var(--text);">${escapeHTML(formatDateLong(date))}</b>.
+      You can still change individual entries afterwards.
+    </p>
+    <div class="bulk-actions" id="bulkActions"></div>`;
+
+  const opts = [
+    { label: 'Mark All PRESENT', value: 'PRESENT', cls: 'success', ico: '✓' },
+    { label: 'Mark All ABSENT', value: 'ABSENT', cls: 'danger', ico: '✗' },
+    { label: 'Mark All HALF DAY', value: 'HALF DAY', cls: 'warning', ico: '◐' },
+    { label: 'Clear All', value: '', cls: 'secondary', ico: '—' }
+  ];
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'btn ghost';
+  cancelBtn.textContent = 'Cancel';
+  const dlg = showModal({
+    title: 'Bulk Mark',
+    body: wrap,
+    footer: cancelBtn
+  });
+  cancelBtn.onclick = () => dlg.close();
+
+  const grp = wrap.querySelector('#bulkActions');
+  opts.forEach(o => {
+    const b = document.createElement('button');
+    b.className = 'btn ' + o.cls;
+    b.innerHTML = `<span class="ico">${o.ico}</span><span>${o.label}</span>`;
+    b.onclick = () => {
+      bulkMark(date, o.value);
+      dlg.close();
+      const msg = o.value
+        ? `All marked ${o.value === 'HALF DAY' ? 'Half Day' : o.value.charAt(0) + o.value.slice(1).toLowerCase()} for ${formatDateShort(date)}`
+        : `Cleared ${formatDateShort(date)}`;
+      showToast(msg, 'success');
+    };
+    grp.appendChild(b);
+  });
+}
+
+function bulkMark(date, value) {
+  state.members.forEach(m => {
+    if (!state.attendance[m.id]) state.attendance[m.id] = {};
+    if (value) state.attendance[m.id][date] = value;
+    else delete state.attendance[m.id][date];
+  });
+  saveState();
+  // Update existing cells in place (no full re-render)
+  document.querySelectorAll(`.att-select[data-date="${date}"]`).forEach(sel => {
+    sel.value = value;
+    sel.className = 'att-select ' + (value === 'PRESENT' ? 'PRESENT' : value === 'ABSENT' ? 'ABSENT' : value === 'HALF DAY' ? 'HALFDAY' : '');
+  });
+  // Update summary
+  const dates = dateRange(state.config.fromDate, state.config.toDate);
   renderSummary(dates);
 }
 
