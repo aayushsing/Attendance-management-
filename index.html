@@ -298,6 +298,24 @@ main {
 .member-row .icon-btn.danger:hover { background: var(--danger-bg); color: var(--danger); }
 .member-row .icon-btn svg { width: 16px; height: 16px; }
 
+
+/* ----- Member bulk delete controls ----- */
+.member-check {
+  width: 18px; height: 18px;
+  accent-color: var(--primary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.member-bulk-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: -6px 0 12px;
+}
+.member-row.selected {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(31,56,100,.12);
+}
+
 /* ----- Empty state ----- */
 .empty {
   text-align: center; padding: 40px 20px;
@@ -679,8 +697,18 @@ footer.credit b { color: var(--primary-text); font-weight: 700; }
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           Import Excel/CSV
         </button>
+        <button class="btn secondary sm" id="btnSelectAllMembers">
+          Select All
+        </button>
+        <button class="btn danger sm" id="btnDeleteSelectedMembers" disabled>
+          Delete Selected
+        </button>
+        <button class="btn danger sm" id="btnDeleteAllMembersTop">
+          Delete All
+        </button>
         <input id="fileInput" type="file" accept=".xlsx,.xls,.csv" style="display:none">
       </div>
+      <div class="member-bulk-hint" id="memberBulkHint">Select members to delete selected records, or use Delete All to remove everyone at once.</div>
       <div id="memberList"></div>
     </div>
 
@@ -722,7 +750,22 @@ footer.credit b { color: var(--primary-text); font-weight: 700; }
         </button>
         <button class="btn full" id="btnExportPdf" style="background:#B91C1C;">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-          PDF
+          Marked PDF
+        </button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Signature Attendance Sheet</div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">
+        Download a blank signature attendance sheet in the same style as your PDF sample. Upload Excel/CSV members first, then export.
+      </p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <button class="btn full" id="btnExportSignaturePdf" style="background:#7F1D1D;">
+          Signature PDF
+        </button>
+        <button class="btn full" id="btnExportWord" style="background:#2563EB;">
+          Word (.doc)
         </button>
       </div>
     </div>
@@ -813,6 +856,7 @@ const DEFAULT_STATE = {
 };
 
 let state = loadState();
+let selectedMemberIds = new Set();
 
 /* ----- Persistence ----- */
 function loadState() {
@@ -1023,16 +1067,24 @@ document.getElementById('btnSaveConfig').addEventListener('click', () => {
 function renderMembers() {
   const list = document.getElementById('memberList');
   document.getElementById('memberCount').textContent = state.members.length;
+
+  // Keep selection only for existing members
+  const existingIds = new Set(state.members.map(m => m.id));
+  selectedMemberIds = new Set([...selectedMemberIds].filter(id => existingIds.has(id)));
+
   if (state.members.length === 0) {
+    selectedMemberIds.clear();
     list.innerHTML = `<div class="empty">
       <div class="icon">👥</div>
       <h3>No members yet</h3>
       <p>Add manually or import from an Excel/CSV file.</p>
     </div>`;
+    updateMemberBulkButtons();
     return;
   }
   list.innerHTML = state.members.map((m, i) => `
-    <div class="member-row" data-id="${m.id}">
+    <div class="member-row ${selectedMemberIds.has(m.id) ? 'selected' : ''}" data-id="${m.id}">
+      <input type="checkbox" class="member-check" data-id="${m.id}" ${selectedMemberIds.has(m.id) ? 'checked' : ''} title="Select member">
       <div class="num">${i + 1}</div>
       <div class="info">
         <div class="name">${escapeHTML(m.name)}</div>
@@ -1051,6 +1103,18 @@ function renderMembers() {
       </div>
     </div>
   `).join('');
+
+  list.querySelectorAll('.member-check').forEach(chk => {
+    chk.addEventListener('change', () => {
+      const id = chk.dataset.id;
+      if (chk.checked) selectedMemberIds.add(id);
+      else selectedMemberIds.delete(id);
+      const row = chk.closest('.member-row');
+      if (row) row.classList.toggle('selected', chk.checked);
+      updateMemberBulkButtons();
+    });
+  });
+
   list.querySelectorAll('.member-row').forEach(row => {
     const id = row.dataset.id;
     row.querySelector('[data-act="edit"]').onclick = () => openMemberDialog(id);
@@ -1058,13 +1122,73 @@ function renderMembers() {
       const m = state.members.find(x => x.id === id);
       showConfirm(`Remove "${m.name}" from the list?`, () => {
         state.members = state.members.filter(x => x.id !== id);
+        selectedMemberIds.delete(id);
         delete state.attendance[id];
         saveState(); renderMembers(); renderTopStats();
         showToast('Member removed', 'success');
       }, true);
     };
   });
+  updateMemberBulkButtons();
 }
+
+function updateMemberBulkButtons() {
+  const total = state.members.length;
+  const selected = selectedMemberIds.size;
+  const selectBtn = document.getElementById('btnSelectAllMembers');
+  const deleteSelectedBtn = document.getElementById('btnDeleteSelectedMembers');
+  const deleteAllBtn = document.getElementById('btnDeleteAllMembersTop');
+  const hint = document.getElementById('memberBulkHint');
+  if (!selectBtn || !deleteSelectedBtn || !deleteAllBtn) return;
+
+  selectBtn.disabled = total === 0;
+  deleteSelectedBtn.disabled = selected === 0;
+  deleteAllBtn.disabled = total === 0;
+  selectBtn.textContent = selected === total && total > 0 ? 'Unselect All' : 'Select All';
+  deleteSelectedBtn.textContent = selected > 0 ? `Delete Selected (${selected})` : 'Delete Selected';
+  if (hint) hint.textContent = selected > 0
+    ? `${selected} selected. You can delete selected members or unselect all.`
+    : 'Select members to delete selected records, or use Delete All to remove everyone at once.';
+}
+
+function toggleSelectAllMembers() {
+  if (!state.members.length) return;
+  if (selectedMemberIds.size === state.members.length) selectedMemberIds.clear();
+  else selectedMemberIds = new Set(state.members.map(m => m.id));
+  renderMembers();
+}
+
+function deleteSelectedMembers() {
+  if (!selectedMemberIds.size) {
+    showToast('Select members first', 'error');
+    return;
+  }
+  const count = selectedMemberIds.size;
+  showConfirm(`Delete ${count} selected member${count > 1 ? 's' : ''} and their attendance records?`, () => {
+    const ids = new Set(selectedMemberIds);
+    state.members = state.members.filter(m => !ids.has(m.id));
+    ids.forEach(id => delete state.attendance[id]);
+    selectedMemberIds.clear();
+    saveState(); renderMembers(); renderTopStats();
+    showToast(`${count} member${count > 1 ? 's' : ''} deleted`, 'success');
+  }, true);
+}
+
+function deleteAllMembersFromMembersTab() {
+  if (!state.members.length) {
+    showToast('No members to delete', 'error');
+    return;
+  }
+  showConfirm('Delete ALL members and all their attendance records? Configuration will stay.', () => {
+    const count = state.members.length;
+    state.members = [];
+    state.attendance = {};
+    selectedMemberIds.clear();
+    saveState(); renderMembers(); renderTopStats();
+    showToast(`${count} member${count > 1 ? 's' : ''} deleted`, 'success');
+  }, true);
+}
+
 
 function openMemberDialog(editId) {
   const m = editId ? state.members.find(x => x.id === editId) : null;
@@ -1112,6 +1236,9 @@ function openMemberDialog(editId) {
 
 document.getElementById('btnAddMember').addEventListener('click', () => openMemberDialog());
 document.getElementById('fab').addEventListener('click', () => openMemberDialog());
+document.getElementById('btnSelectAllMembers').addEventListener('click', toggleSelectAllMembers);
+document.getElementById('btnDeleteSelectedMembers').addEventListener('click', deleteSelectedMembers);
+document.getElementById('btnDeleteAllMembersTop').addEventListener('click', deleteAllMembersFromMembersTab);
 
 /* ----- Import ----- */
 document.getElementById('btnImport').addEventListener('click', () => {
@@ -1197,6 +1324,7 @@ document.getElementById('fileInput').addEventListener('change', async (e) => {
     replaceBtn.onclick = () => {
       state.members = newMembers;
       state.attendance = {};
+      selectedMemberIds.clear();
       saveState(); renderMembers(); renderTopStats();
       showToast(`Replaced with ${newMembers.length} members`, 'success');
       dlg.close();
@@ -1782,6 +1910,201 @@ function exportPdf() {
   doc.save(makeFileName('pdf'));
 }
 
+/* ============ SIGNATURE SHEET PDF / WORD ============ */
+document.getElementById('btnExportSignaturePdf').addEventListener('click', () => {
+  if (!validateForExport()) return;
+  try {
+    exportSignaturePdf();
+    showToast('Signature PDF downloaded', 'success');
+  } catch (e) {
+    console.error(e);
+    showToast('Signature PDF failed: ' + e.message, 'error');
+  }
+});
+
+document.getElementById('btnExportWord').addEventListener('click', () => {
+  if (!validateForExport()) return;
+  try {
+    exportSignatureWord();
+    showToast('Word file downloaded', 'success');
+  } catch (e) {
+    console.error(e);
+    showToast('Word export failed: ' + e.message, 'error');
+  }
+});
+
+function getTrainingLine() {
+  const first = state.config.fromDate ? formatDateShort(state.config.fromDate) : '';
+  return first ? `Training — ${first}` : 'Training';
+}
+
+function exportSignaturePdf() {
+  const { jsPDF } = window.jspdf;
+  const cfg = state.config;
+  const dates = dateRange(cfg.fromDate, cfg.toDate);
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+  const M = 28;
+
+  const head = [[
+    'S. No.', 'Name', 'KV Code', 'School Name',
+    ...dates.map(d => `Signature
+${formatDateShort(d)}`)
+  ]];
+  const body = state.members.map((m, i) => [
+    i + 1,
+    m.name || '',
+    m.kvCode || '',
+    m.school || '',
+    ...dates.map(() => '')
+  ]);
+
+  const drawBorderAndFooter = () => {
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(1.4);
+    doc.rect(M - 6, M - 6, W - 2*(M - 6), H - 2*(M - 6));
+    doc.setLineWidth(0.5);
+    doc.rect(M - 2, M - 2, W - 2*(M - 2), H - 2*(M - 2));
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Page ${doc.internal.getNumberOfPages()}`, W/2, H - 12, { align: 'center' });
+  };
+
+  const titleY = M + 10;
+  doc.setTextColor(0, 0, 0);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(20);
+  doc.text(cfg.place || 'Institute Name', W/2, titleY + 10, { align: 'center' });
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(12);
+  doc.text('', W/2, titleY + 26, { align: 'center' });
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  doc.text(getTrainingLine(), W/2, titleY + 45, { align: 'center' });
+  doc.setFontSize(11.5);
+  doc.text(`Subject: ${cfg.cohort || 'Cohort'}  |  ${cfg.title || 'Attendance Sheet'}`, W/2, titleY + 66, { align: 'center' });
+
+  const fixedWidths = { 0: 40, 1: 135, 2: 56, 3: 165 };
+  const remaining = W - 2*M - Object.values(fixedWidths).reduce((a,b)=>a+b,0);
+  const sigW = Math.max(62, remaining / Math.max(1, dates.length));
+  const columnStyles = {
+    0: { cellWidth: fixedWidths[0], halign: 'center' },
+    1: { cellWidth: fixedWidths[1], halign: 'left' },
+    2: { cellWidth: fixedWidths[2], halign: 'center' },
+    3: { cellWidth: fixedWidths[3], halign: 'left' }
+  };
+  dates.forEach((_, i) => columnStyles[4 + i] = { cellWidth: sigW, halign: 'center' });
+
+  doc.autoTable({
+    head,
+    body,
+    startY: M + 98,
+    margin: { left: M, right: M, top: M + 8, bottom: 38 },
+    theme: 'grid',
+    showHead: 'everyPage',
+    pageBreak: 'auto',
+    rowPageBreak: 'avoid',
+    styles: {
+      font: 'helvetica',
+      fontSize: 9.2,
+      cellPadding: { top: 5, right: 6, bottom: 5, left: 6 },
+      lineColor: [0,0,0],
+      lineWidth: 0.5,
+      textColor: [0,0,0],
+      valign: 'middle',
+      overflow: 'linebreak',
+      minCellHeight: 28
+    },
+    headStyles: {
+      fillColor: [255,255,255],
+      textColor: [0,0,0],
+      fontStyle: 'bold',
+      halign: 'center',
+      valign: 'middle',
+      minCellHeight: 35,
+      lineWidth: 0.7
+    },
+    columnStyles,
+    didParseCell(data) {
+      if (data.section === 'body') {
+        data.cell.styles.minCellHeight = 28;
+        if (data.column.index === 1 || data.column.index === 3) data.cell.styles.halign = 'left';
+        else data.cell.styles.halign = 'center';
+      }
+    },
+    didDrawPage() {
+      drawBorderAndFooter();
+    }
+  });
+
+  doc.save(makeFileName('signature.pdf'));
+}
+
+function exportSignatureWord() {
+  const cfg = state.config;
+  const dates = dateRange(cfg.fromDate, cfg.toDate);
+  const headerCells = ['S. No.', 'Name', 'KV Code', 'School Name', ...dates.map(d => `Signature<br>${formatDateShort(d)}`)]
+    .map(h => `<th>${h}</th>`).join('');
+  const rows = state.members.map((m, i) => `<tr>
+    <td style="text-align:center;">${i + 1}</td>
+    <td>${escapeHTML(m.name || '')}</td>
+    <td style="text-align:center;">${escapeHTML(m.kvCode || '')}</td>
+    <td>${escapeHTML(m.school || '')}</td>
+    ${dates.map(() => '<td>&nbsp;</td>').join('')}
+  </tr>`).join('');
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>${escapeHTML(cfg.title || 'Attendance Sheet')}</title>
+<style>
+  @page Section1 { size: 11.69in 8.27in; mso-page-orientation: landscape; margin: .35in .35in .35in .35in; }
+  div.Section1 { page: Section1; }
+  body { font-family: Arial, sans-serif; color: #000; }
+  .page-border { border: 3px double #000; padding: 8px; min-height: 7.45in; }
+  h1 { font-size: 22pt; text-align: center; margin: 0 0 2px; }
+  .sub { text-align:center; font-size: 12pt; margin: 0; }
+  .training { text-align:center; font-size: 14pt; font-weight: 700; margin: 6px 0 8px; }
+  .subject { text-align:center; font-size: 12pt; font-weight: 700; margin: 0 0 10px; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 10.5pt; }
+  th, td { border: 1px solid #000; padding: 7px 8px; vertical-align: middle; }
+  th { text-align: center; font-weight: 700; }
+  td { height: 28px; }
+  th:nth-child(1), td:nth-child(1) { width: 42px; }
+  th:nth-child(2), td:nth-child(2) { width: 150px; }
+  th:nth-child(3), td:nth-child(3) { width: 60px; }
+  th:nth-child(4), td:nth-child(4) { width: 190px; }
+</style>
+</head>
+<body>
+<div class="Section1">
+  <div class="page-border">
+    <h1>${escapeHTML(cfg.place || 'Institute Name')}</h1>
+    <p class="training">${escapeHTML(getTrainingLine())}</p>
+    <p class="subject">Subject: ${escapeHTML(cfg.cohort || 'Cohort')} &nbsp; | &nbsp; ${escapeHTML(cfg.title || 'Attendance Sheet')}</p>
+    <table>
+      <thead><tr>${headerCells}</tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>
+</div>
+</body>
+</html>`;
+
+  const blob = new Blob(['﻿', html], { type: 'application/msword' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = makeFileName('doc');
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 /* ============ BACKUP / RESTORE ============ */
 document.getElementById('btnBackup').addEventListener('click', () => {
   const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
@@ -1826,7 +2149,7 @@ document.getElementById('btnClearAttendance').addEventListener('click', () => {
 
 document.getElementById('btnClearMembers').addEventListener('click', () => {
   showConfirm('Remove all members and their attendance? Configuration will stay.', () => {
-    state.members = []; state.attendance = {};
+    state.members = []; state.attendance = {}; selectedMemberIds.clear();
     saveState(); fullRender();
     showToast('All members removed', 'success');
   }, true);
