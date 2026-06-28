@@ -670,6 +670,12 @@ footer.credit b { color: var(--primary-text); font-weight: 700; }
       </div>
       <div class="field-hint" style="margin-top:-8px;margin-bottom:14px;">A column will be created for each day in this range.</div>
 
+      <div class="field">
+        <label>Teacher Reporting Date</label>
+        <input id="cfgReportingDate" type="date">
+        <div class="field-hint">Used in the Relieving Verification Sheet PDF</div>
+      </div>
+
       <button class="btn full" id="btnSaveConfig">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
         Save Configuration
@@ -771,6 +777,16 @@ footer.credit b { color: var(--primary-text); font-weight: 700; }
     </div>
 
     <div class="card">
+      <div class="section-title">Relieving Verification Sheet</div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">
+        Download the relieving verification PDF in the same signature-sheet format. It uses the Teacher Reporting Date from Settings and keeps one signature column only.
+      </p>
+      <button class="btn full" id="btnExportRelievingPdf" style="background:#92400E;">
+        Relieving Verification PDF
+      </button>
+    </div>
+
+    <div class="card">
       <div class="section-title">Backup &amp; Restore</div>
       <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">
         Download all your data as a JSON backup file, or restore from a previous backup.
@@ -849,7 +865,8 @@ const DEFAULT_STATE = {
     place: 'MNNIT Allahabad',
     cohort: 'PGT Mathematics',
     fromDate: '',
-    toDate: ''
+    toDate: '',
+    reportingDate: ''
   },
   members: [],
   attendance: {} // { memberId: { 'YYYY-MM-DD': 'PRESENT'|'ABSENT'|'HALF DAY' } }
@@ -1019,6 +1036,7 @@ function loadConfigForm() {
   document.getElementById('cfgCohort').value = state.config.cohort || '';
   document.getElementById('cfgFrom').value = state.config.fromDate || '';
   document.getElementById('cfgTo').value = state.config.toDate || '';
+  document.getElementById('cfgReportingDate').value = state.config.reportingDate || '';
   renderPreview();
 }
 
@@ -1028,6 +1046,7 @@ function renderPreview() {
   const dateLine = dates.length
     ? `${formatDateShort(c.fromDate)} to ${formatDateShort(c.toDate)} (${dates.length} day${dates.length>1?'s':''})`
     : 'No date range set';
+  const reportingLine = c.reportingDate ? `Teacher Reporting Date: ${formatDateShort(c.reportingDate)}` : 'Teacher Reporting Date: Not set';
   document.getElementById('previewBox').innerHTML = `
     <div style="background:#1F3864;color:white;text-align:center;padding:14px 8px;font-weight:700;font-size:15px;letter-spacing:.02em;">
       ${escapeHTML((c.place || 'YOUR PLACE HERE').toUpperCase())}
@@ -1037,6 +1056,9 @@ function renderPreview() {
     </div>
     <div style="background:#FFE699;color:#1F3864;text-align:center;padding:8px;font-weight:700;font-size:12px;">
       ${escapeHTML((c.title || 'ATTENDANCE SHEET').toUpperCase())} — ${escapeHTML(dateLine.toUpperCase())}
+    </div>
+    <div style="background:#fff;color:#1F3864;text-align:center;padding:8px;font-weight:600;font-size:12px;">
+      ${escapeHTML(reportingLine)}
     </div>`;
 }
 
@@ -1046,7 +1068,8 @@ document.getElementById('btnSaveConfig').addEventListener('click', () => {
     place: document.getElementById('cfgPlace').value.trim(),
     cohort: document.getElementById('cfgCohort').value.trim(),
     fromDate: document.getElementById('cfgFrom').value,
-    toDate: document.getElementById('cfgTo').value
+    toDate: document.getElementById('cfgTo').value,
+    reportingDate: document.getElementById('cfgReportingDate').value
   };
   if (!newCfg.place) { showToast('Place is required', 'error'); return; }
   if (newCfg.fromDate && newCfg.toDate && newCfg.fromDate > newCfg.toDate) {
@@ -1059,7 +1082,7 @@ document.getElementById('btnSaveConfig').addEventListener('click', () => {
   showToast('Configuration saved', 'success');
 });
 
-['cfgTitle','cfgPlace','cfgCohort','cfgFrom','cfgTo'].forEach(id => {
+['cfgTitle','cfgPlace','cfgCohort','cfgFrom','cfgTo','cfgReportingDate'].forEach(id => {
   document.getElementById(id).addEventListener('input', renderPreview);
 });
 
@@ -1922,6 +1945,17 @@ document.getElementById('btnExportSignaturePdf').addEventListener('click', () =>
   }
 });
 
+document.getElementById('btnExportRelievingPdf').addEventListener('click', () => {
+  if (!validateForExport()) return;
+  try {
+    exportRelievingVerificationPdf();
+    showToast('Relieving Verification PDF downloaded', 'success');
+  } catch (e) {
+    console.error(e);
+    showToast('Relieving Verification PDF failed: ' + e.message, 'error');
+  }
+});
+
 document.getElementById('btnExportWord').addEventListener('click', () => {
   if (!validateForExport()) return;
   try {
@@ -2040,6 +2074,107 @@ ${formatDateShort(d)}`)
   });
 
   doc.save(makeFileName('signature.pdf'));
+}
+
+
+function exportRelievingVerificationPdf() {
+  const { jsPDF } = window.jspdf;
+  const cfg = state.config;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+  const M = 28;
+  const reportingDate = cfg.reportingDate ? formatDateShort(cfg.reportingDate) : '';
+
+  const head = [[
+    'S. No.', 'Name', 'KV Code', 'School Name', 'Teacher Reporting Date', 'Signature'
+  ]];
+  const body = state.members.map((m, i) => [
+    i + 1,
+    m.name || '',
+    m.kvCode || '',
+    m.school || '',
+    reportingDate,
+    ''
+  ]);
+
+  const drawBorderAndFooter = () => {
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(1.4);
+    doc.rect(M - 6, M - 6, W - 2*(M - 6), H - 2*(M - 6));
+    doc.setLineWidth(0.5);
+    doc.rect(M - 2, M - 2, W - 2*(M - 2), H - 2*(M - 2));
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Page ${doc.internal.getNumberOfPages()}`, W/2, H - 12, { align: 'center' });
+  };
+
+  const titleY = M + 10;
+  doc.setTextColor(0, 0, 0);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(20);
+  doc.text(cfg.place || 'Institute Name', W/2, titleY + 10, { align: 'center' });
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  doc.text(getTrainingLine(), W/2, titleY + 45, { align: 'center' });
+  doc.setFontSize(11.5);
+  doc.text(`Subject: ${cfg.cohort || 'Cohort'}  |  Relieving Verification Sheet`, W/2, titleY + 66, { align: 'center' });
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10.5);
+  doc.text(`Teacher Reporting Date: ${reportingDate || '________________'}`, W/2, titleY + 84, { align: 'center' });
+
+  doc.autoTable({
+    head,
+    body,
+    startY: M + 112,
+    margin: { left: M, right: M, top: M + 8, bottom: 38 },
+    theme: 'grid',
+    showHead: 'everyPage',
+    pageBreak: 'auto',
+    rowPageBreak: 'avoid',
+    styles: {
+      font: 'helvetica',
+      fontSize: 9.2,
+      cellPadding: { top: 5, right: 6, bottom: 5, left: 6 },
+      lineColor: [0,0,0],
+      lineWidth: 0.5,
+      textColor: [0,0,0],
+      valign: 'middle',
+      overflow: 'linebreak',
+      minCellHeight: 30
+    },
+    headStyles: {
+      fillColor: [255,255,255],
+      textColor: [0,0,0],
+      fontStyle: 'bold',
+      halign: 'center',
+      valign: 'middle',
+      minCellHeight: 35,
+      lineWidth: 0.7
+    },
+    columnStyles: {
+      0: { cellWidth: 45, halign: 'center' },
+      1: { cellWidth: 145, halign: 'left' },
+      2: { cellWidth: 65, halign: 'center' },
+      3: { cellWidth: 225, halign: 'left' },
+      4: { cellWidth: 135, halign: 'center' },
+      5: { cellWidth: W - 2*M - 45 - 145 - 65 - 225 - 135, halign: 'center' }
+    },
+    didParseCell(data) {
+      if (data.section === 'body') {
+        data.cell.styles.minCellHeight = 30;
+        if (data.column.index === 1 || data.column.index === 3) data.cell.styles.halign = 'left';
+        else data.cell.styles.halign = 'center';
+      }
+    },
+    didDrawPage() {
+      drawBorderAndFooter();
+    }
+  });
+
+  const base = makeFileName('pdf').replace(/\.pdf$/i, '');
+  doc.save(base + '_relieving_verification.pdf');
 }
 
 function exportSignatureWord() {
