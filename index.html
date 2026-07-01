@@ -787,6 +787,26 @@ footer.credit b { color: var(--primary-text); font-weight: 700; }
     </div>
 
     <div class="card">
+      <div class="section-title">TOPS Group Allotment</div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">
+        Randomly create balanced TOPS groups from all members. Each group is kept as equal as possible, normally 4–5 members, and laptop availability is distributed across groups.
+      </p>
+      <div class="field">
+        <label>Members Without Laptop</label>
+        <textarea id="cfgNoLaptopText" rows="4" placeholder="Paste names without laptop here — one name per line, or comma separated"></textarea>
+        <div class="field-hint">Names should match imported member names. These members will be spread across groups so every group gets laptop support as much as possible.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <button class="btn full" id="btnExportTopsPdf" style="background:#4C1D95;">
+          TOPS Group PDF
+        </button>
+        <button class="btn full" id="btnExportTopsWord" style="background:#1D4ED8;">
+          TOPS Group Word (.doc)
+        </button>
+      </div>
+    </div>
+
+    <div class="card">
       <div class="section-title">Backup &amp; Restore</div>
       <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">
         Download all your data as a JSON backup file, or restore from a previous backup.
@@ -866,7 +886,8 @@ const DEFAULT_STATE = {
     cohort: 'PGT Mathematics',
     fromDate: '',
     toDate: '',
-    reportingDate: ''
+    reportingDate: '',
+    noLaptopText: ''
   },
   members: [],
   attendance: {} // { memberId: { 'YYYY-MM-DD': 'PRESENT'|'ABSENT'|'HALF DAY' } }
@@ -1021,7 +1042,7 @@ function go(tabName) {
   document.getElementById('fab').style.display = (tabName === 'members') ? 'flex' : 'none';
   // Re-render tab content
   if (tabName === 'mark') renderMark();
-  if (tabName === 'export') renderTopStats();
+  if (tabName === 'export') { renderTopStats(); const nl = document.getElementById('cfgNoLaptopText'); if (nl) nl.value = state.config.noLaptopText || ''; }
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -1037,6 +1058,8 @@ function loadConfigForm() {
   document.getElementById('cfgFrom').value = state.config.fromDate || '';
   document.getElementById('cfgTo').value = state.config.toDate || '';
   document.getElementById('cfgReportingDate').value = state.config.reportingDate || '';
+  const nl = document.getElementById('cfgNoLaptopText');
+  if (nl) nl.value = state.config.noLaptopText || '';
   renderPreview();
 }
 
@@ -1069,7 +1092,8 @@ document.getElementById('btnSaveConfig').addEventListener('click', () => {
     cohort: document.getElementById('cfgCohort').value.trim(),
     fromDate: document.getElementById('cfgFrom').value,
     toDate: document.getElementById('cfgTo').value,
-    reportingDate: document.getElementById('cfgReportingDate').value
+    reportingDate: document.getElementById('cfgReportingDate').value,
+    noLaptopText: state.config.noLaptopText || ''
   };
   if (!newCfg.place) { showToast('Place is required', 'error'); return; }
   if (newCfg.fromDate && newCfg.toDate && newCfg.fromDate > newCfg.toDate) {
@@ -1967,6 +1991,36 @@ document.getElementById('btnExportWord').addEventListener('click', () => {
   }
 });
 
+const noLaptopBox = document.getElementById('cfgNoLaptopText');
+if (noLaptopBox) {
+  noLaptopBox.addEventListener('input', () => {
+    state.config.noLaptopText = noLaptopBox.value;
+    saveState();
+  });
+}
+
+document.getElementById('btnExportTopsPdf').addEventListener('click', () => {
+  if (!validateMembersForGroupExport()) return;
+  try {
+    exportTopsGroupPdf();
+    showToast('TOPS Group PDF downloaded', 'success');
+  } catch (e) {
+    console.error(e);
+    showToast('TOPS Group PDF failed: ' + e.message, 'error');
+  }
+});
+
+document.getElementById('btnExportTopsWord').addEventListener('click', () => {
+  if (!validateMembersForGroupExport()) return;
+  try {
+    exportTopsGroupWord();
+    showToast('TOPS Group Word downloaded', 'success');
+  } catch (e) {
+    console.error(e);
+    showToast('TOPS Group Word failed: ' + e.message, 'error');
+  }
+});
+
 function getTrainingLine() {
   const first = state.config.fromDate ? formatDateShort(state.config.fromDate) : '';
   return first ? `Training — ${first}` : 'Training';
@@ -2234,6 +2288,307 @@ function exportSignatureWord() {
   const a = document.createElement('a');
   a.href = url;
   a.download = makeFileName('doc');
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+
+/* ============ TOPS GROUP ALLOTMENT PDF / WORD ============ */
+function normalizeNameForMatch(s) {
+  return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
+}
+
+function parseNoLaptopNames() {
+  const box = document.getElementById('cfgNoLaptopText');
+  const text = box ? box.value : (state.config.noLaptopText || '');
+  state.config.noLaptopText = text || '';
+  saveState();
+  return new Set(String(text || '')
+    .split(/[\n,;]+/)
+    .map(normalizeNameForMatch)
+    .filter(Boolean));
+}
+
+function shuffleArray(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function chooseGroupSizes(total) {
+  if (total <= 0) return [];
+  if (total <= 6) return [total];
+
+  // Preference: groups of 4–5 members as requested.
+  for (let groups = Math.ceil(total / 5); groups <= Math.floor(total / 4); groups++) {
+    const sizes = Array(groups).fill(4);
+    let extra = total - groups * 4;
+    let idx = 0;
+    while (extra > 0) { sizes[idx % groups]++; extra--; idx++; }
+    if (sizes.every(x => x >= 4 && x <= 5)) return sizes.sort((a,b)=>b-a);
+  }
+
+  // Fallback for totals like 6, 11, 17: allow max 6 only when 4–5 is mathematically impossible.
+  for (let groups = Math.ceil(total / 6); groups <= Math.floor(total / 4); groups++) {
+    const sizes = Array(groups).fill(4);
+    let extra = total - groups * 4;
+    let idx = 0;
+    while (extra > 0) { sizes[idx % groups]++; extra--; idx++; }
+    if (sizes.every(x => x >= 4 && x <= 6)) return sizes.sort((a,b)=>b-a);
+  }
+
+  // Last fallback keeps groups as balanced as possible.
+  const groups = Math.max(1, Math.round(total / 5));
+  const base = Math.floor(total / groups);
+  let extra = total % groups;
+  return Array.from({ length: groups }, () => base + (extra-- > 0 ? 1 : 0));
+}
+
+function buildTopsGroups() {
+  const noLaptopSet = parseNoLaptopNames();
+  const all = shuffleArray(state.members.map((m, i) => ({
+    ...m,
+    originalIndex: i + 1,
+    hasLaptop: !noLaptopSet.has(normalizeNameForMatch(m.name))
+  })));
+
+  const withLaptop = shuffleArray(all.filter(m => m.hasLaptop));
+  const withoutLaptop = shuffleArray(all.filter(m => !m.hasLaptop));
+  const sizes = chooseGroupSizes(all.length);
+  const groups = sizes.map((size, i) => ({ name: `Team ${i + 1}`, size, members: [] }));
+
+  // First put at least one laptop member in each group wherever possible.
+  groups.forEach(g => {
+    if (withLaptop.length && g.members.length < g.size) g.members.push(withLaptop.pop());
+  });
+
+  // Spread members without laptops, one by one, into the group with lowest current no-laptop load.
+  while (withoutLaptop.length) {
+    const candidates = groups.filter(g => g.members.length < g.size);
+    if (!candidates.length) break;
+    candidates.sort((a,b) => {
+      const aNo = a.members.filter(m => !m.hasLaptop).length;
+      const bNo = b.members.filter(m => !m.hasLaptop).length;
+      return aNo - bNo || a.members.length - b.members.length || a.size - b.size;
+    });
+    candidates[0].members.push(withoutLaptop.pop());
+  }
+
+  // Fill remaining seats with laptop members, distributed by current group size.
+  while (withLaptop.length) {
+    const candidates = groups.filter(g => g.members.length < g.size);
+    if (!candidates.length) break;
+    candidates.sort((a,b) => a.members.length - b.members.length || a.size - b.size);
+    candidates[0].members.push(withLaptop.pop());
+  }
+
+  // If any member remains due to unexpected sizing, add to the smallest group.
+  const leftovers = withoutLaptop.concat(withLaptop);
+  while (leftovers.length) {
+    groups.sort((a,b) => a.members.length - b.members.length);
+    groups[0].members.push(leftovers.pop());
+  }
+
+  groups.forEach(g => g.members = shuffleArray(g.members));
+  return groups;
+}
+
+function validateMembersForGroupExport() {
+  if (state.members.length === 0) {
+    showToast('Add or import members first', 'error');
+    return false;
+  }
+  if (state.members.length < 4) {
+    showToast('Minimum 4 members recommended for TOPS grouping', 'error');
+    return false;
+  }
+  return true;
+}
+
+function drawTopsHeader(doc, title, startY) {
+  const cfg = state.config;
+  const W = doc.internal.pageSize.getWidth();
+  const M = 28;
+  doc.setTextColor(0, 0, 0);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(20);
+  doc.text(cfg.place || 'Institute Name', W/2, startY + 10, { align: 'center' });
+  doc.setFontSize(13);
+  doc.text(getTrainingLine(), W/2, startY + 36, { align: 'center' });
+  doc.setFontSize(14);
+  doc.text(title, W/2, startY + 58, { align: 'center' });
+  doc.setFontSize(11.5);
+  doc.text(`Subject: ${cfg.cohort || 'Cohort'}`, W/2, startY + 78, { align: 'center' });
+  doc.setDrawColor(0,0,0);
+  doc.setLineWidth(0.8);
+  doc.line(M, startY + 90, W - M, startY + 90);
+}
+
+function exportTopsGroupPdf() {
+  const { jsPDF } = window.jspdf;
+  const groups = buildTopsGroups();
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+  const M = 28;
+
+  const drawBorderAndFooter = () => {
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(1.4);
+    doc.rect(M - 6, M - 6, W - 2*(M - 6), H - 2*(M - 6));
+    doc.setLineWidth(0.5);
+    doc.rect(M - 2, M - 2, W - 2*(M - 2), H - 2*(M - 2));
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`TOPS Group Allotment · Page ${doc.internal.getNumberOfPages()}`, W/2, H - 12, { align: 'center' });
+  };
+
+  drawTopsHeader(doc, 'TOPS GROUP ALLOTMENT', M + 10);
+
+  const body = [];
+  groups.forEach((g, gi) => {
+    const laptopCount = g.members.filter(m => m.hasLaptop).length;
+    body.push([{ content: `${g.name.toUpperCase()}  |  Total Members: ${g.members.length}  |  Laptop Available: ${laptopCount}`, colSpan: 6, styles: { fillColor: [31,56,100], textColor: [255,255,255], fontStyle: 'bold', halign: 'left' } }]);
+    g.members.forEach((m, i) => body.push([
+      i + 1,
+      m.name || '',
+      m.kvCode || '',
+      m.school || '',
+      m.hasLaptop ? 'Yes' : 'No',
+      ''
+    ]));
+  });
+
+  doc.autoTable({
+    head: [['S. No.', 'Name', 'KV Code', 'School Name', 'Laptop', 'Remarks / Signature']],
+    body,
+    startY: M + 118,
+    margin: { left: M, right: M, top: M + 8, bottom: 38 },
+    theme: 'grid',
+    showHead: 'everyPage',
+    pageBreak: 'auto',
+    rowPageBreak: 'avoid',
+    styles: {
+      font: 'helvetica',
+      fontSize: 9.2,
+      cellPadding: { top: 5, right: 6, bottom: 5, left: 6 },
+      lineColor: [0,0,0],
+      lineWidth: 0.55,
+      textColor: [0,0,0],
+      valign: 'middle',
+      overflow: 'linebreak',
+      minCellHeight: 27
+    },
+    headStyles: {
+      fillColor: [255,255,255],
+      textColor: [0,0,0],
+      fontStyle: 'bold',
+      halign: 'center',
+      valign: 'middle',
+      minCellHeight: 32,
+      lineWidth: 0.8
+    },
+    columnStyles: {
+      0: { cellWidth: 45, halign: 'center' },
+      1: { cellWidth: 155, halign: 'left' },
+      2: { cellWidth: 70, halign: 'center' },
+      3: { cellWidth: 260, halign: 'left' },
+      4: { cellWidth: 65, halign: 'center' },
+      5: { cellWidth: W - 2*M - 45 - 155 - 70 - 260 - 65, halign: 'center' }
+    },
+    didParseCell(data) {
+      if (data.section === 'body') {
+        if (data.cell.raw && typeof data.cell.raw === 'object' && data.cell.raw.colSpan) {
+          data.cell.styles.minCellHeight = 24;
+        } else {
+          data.cell.styles.minCellHeight = 28;
+          if (data.column.index === 1 || data.column.index === 3) data.cell.styles.halign = 'left';
+          else data.cell.styles.halign = 'center';
+        }
+      }
+    },
+    didDrawPage() {
+      drawBorderAndFooter();
+    }
+  });
+
+  const base = makeFileName('pdf').replace(/\.pdf$/i, '');
+  doc.save(base + '_tops_group_allotment.pdf');
+}
+
+function exportTopsGroupWord() {
+  const cfg = state.config;
+  const groups = buildTopsGroups();
+  const groupHtml = groups.map(g => {
+    const laptopCount = g.members.filter(m => m.hasLaptop).length;
+    const rows = g.members.map((m, i) => `<tr>
+      <td style="text-align:center;">${i + 1}</td>
+      <td>${escapeHTML(m.name || '')}</td>
+      <td style="text-align:center;">${escapeHTML(m.kvCode || '')}</td>
+      <td>${escapeHTML(m.school || '')}</td>
+      <td style="text-align:center;">${m.hasLaptop ? 'Yes' : 'No'}</td>
+      <td>&nbsp;</td>
+    </tr>`).join('');
+    return `<table class="group-table">
+      <thead>
+        <tr><th class="group-head" colspan="6">${escapeHTML(g.name.toUpperCase())} &nbsp; | &nbsp; Total Members: ${g.members.length} &nbsp; | &nbsp; Laptop Available: ${laptopCount}</th></tr>
+        <tr><th>S. No.</th><th>Name</th><th>KV Code</th><th>School Name</th><th>Laptop</th><th>Remarks / Signature</th></tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>TOPS Group Allotment</title>
+<style>
+  @page Section1 { size: 11.69in 8.27in; mso-page-orientation: landscape; margin: .35in .35in .35in .35in; }
+  div.Section1 { page: Section1; }
+  body { font-family: Arial, sans-serif; color: #000; }
+  .page-border { border: 3px double #000; padding: 10px; min-height: 7.45in; }
+  h1 { font-size: 22pt; text-align: center; margin: 0 0 4px; }
+  .training { text-align:center; font-size: 14pt; font-weight: 700; margin: 6px 0 6px; }
+  .tops { text-align:center; font-size: 16pt; font-weight: 700; margin: 6px 0 6px; text-decoration: underline; }
+  .subject { text-align:center; font-size: 12pt; font-weight: 700; margin: 0 0 12px; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 10.5pt; margin-bottom: 12px; page-break-inside: avoid; }
+  th, td { border: 1.2px solid #000; padding: 7px 8px; vertical-align: middle; }
+  th { text-align: center; font-weight: 700; }
+  td { height: 26px; }
+  .group-head { background: #1F3864; color: #fff; text-align: left; font-size: 11.5pt; padding: 8px; }
+  th:nth-child(1), td:nth-child(1) { width: 45px; }
+  th:nth-child(2), td:nth-child(2) { width: 165px; }
+  th:nth-child(3), td:nth-child(3) { width: 70px; }
+  th:nth-child(4), td:nth-child(4) { width: 300px; }
+  th:nth-child(5), td:nth-child(5) { width: 65px; }
+</style>
+</head>
+<body>
+<div class="Section1">
+  <div class="page-border">
+    <h1>${escapeHTML(cfg.place || 'Institute Name')}</h1>
+    <p class="training">${escapeHTML(getTrainingLine())}</p>
+    <p class="tops">TOPS GROUP ALLOTMENT</p>
+    <p class="subject">Subject: ${escapeHTML(cfg.cohort || 'Cohort')}</p>
+    ${groupHtml}
+  </div>
+</div>
+</body>
+</html>`;
+
+  const blob = new Blob(['﻿', html], { type: 'application/msword' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const base = makeFileName('doc').replace(/\.doc$/i, '');
+  a.download = base + '_tops_group_allotment.doc';
   document.body.appendChild(a);
   a.click();
   a.remove();
